@@ -1,0 +1,15 @@
+# document-to-markdown pip 依赖（主环境安装）
+# MinerU 是解析引擎（pip 安装体积大，含模型）；其余为质检/导出补丁。
+# 独立 venv 工具（Pix2Text/Pandoc）见 .env.example，不在此列。
+
+# === 解析引擎 ===
+mineru[all]>=2.0.0          # 文档解析引擎（含 PaddleOCR/版面/表格/公式）
+pymupdf>=1.24.0             # PDF 切片/渲染
+
+# === 质检补丁（T1/T2/T4）===
+mistune>=3.0.0              # T1: Markdown 语法门禁
+camelot-py[base]>=2.0.0     # T2: 表格复核
+pikepdf>=10.0.0             # T4: 坏 PDF 急救
+
+# === 云端 API 请求 ===
+requests>=2.31.0            # mineru_day.py 云端上传/轮询

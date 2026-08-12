@@ -1,0 +1,97 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.2.0] - 2026-08-11
+
+Modular restructure + text-cleaning-engine integration.
+
+### Changed
+
+- **Modular package layout**: scripts reorganized from flat root files into
+  `converter/` (core conversion), `quality/` (T1/T2/T4 patches), `export/` (T5),
+  `tools/` (helpers), `cli/` (entry points).
+- **Single source of truth for paths** (`paths.py`): all scripts now resolve
+  data/docs/logs/tool paths from one module, environment-overridable
+  (`DTM_ROOT`, `DTM_MINERU_ENV`, `DTM_PANDOC`, …). No more per-script path drift.
+- **Root thin entry points**: `python auto_convert.py` and `python mineru_day.py`
+  still work — they forward to the packages.
+
+### Added
+
+- **`requirements.txt`** — full pip dependency list.
+- **`.env.example`** — environment template (paths + API keys, never committed).
+- **`tests/`** — unit tests for `md_lint`, `table_recheck`, `pdf_repair`, `export`.
+- **`--clean` integration hook** (`tools/clean_hook.py`): after conversion, hands
+  `full.md` to [text-cleaning-engine](https://github.com/SpiralQWQ/text-cleaning-engine)
+  to strip watermarks/navigation/garbled fragments → `full_clean.md`.
+  Enabled via `python auto_convert.py --clean`; requires `DTM_CLEANER_PATH`.
+  Silently skips when not configured. Fixed UTF-8 stdin/stdout for correct CJK.
+
+### Fixed (found by exhaustive testing)
+
+- **Pandoc detection regression**: after restructure, `PANDOC` defaulted to
+  `pandoc` on PATH, but the portable Pandoc wasn't on PATH → all exports failed.
+  `paths._detect_pandoc()` now checks env var → portable path → PATH.
+- **clean_hook env read**: `CLEANER_PATH` was captured at import time, so changing
+  `DTM_CLEANER_PATH` mid-run had no effect. Now read live via `_cleaner_path()`.
+
+### Tested
+
+- **84 exhaustive test cases** across 8 tasks (paths, md_lint, table_recheck,
+  pdf_repair, export_md, clean_hook, CLI entry, imports/privacy), each passing
+  4 review rounds. Full report: `docs/开源发布验收报告_v1.0.md`.
+
+## [0.1.0] - 2026-08-11
+
+Initial open-source release: a batch document-to-Markdown converter powered by
+MinerU, with quality-gate patches and multi-format export.
+
+### Added
+
+- **Core converter** (`auto_convert.py`): batch-converts PDF/DOCX/PPTX per plan,
+  forced OCR on all documents, quality-checked, resume-safe (skips completed blocks).
+- **Cloud converter** (`mineru_day.py`): batch upload → poll → download using the
+  MinerU cloud API (`model_version=vlm`, forced OCR for complex docs).
+- **T1 · Markdown syntax gate** (`md_lint.py`): uses mistune 3.x AST to check
+  table column consistency, code-fence closure, and garbled characters.
+  Integrated into `verify_output()`.
+- **T2 · Table quality check** (`table_recheck.py`): uses camelot 2.x
+  (stream/lattice + accuracy scoring) to flag low-confidence tables.
+  Integrated into `verify_output()` (only for PDFs ≤200 pages).
+- **T4 · PDF repair** (`pdf_repair.py`): uses pikepdf 10.x to strip empty-password
+  encryption and recover lightly corrupted PDFs; true encryption is flagged
+  for manual handling. Integrated into `convert_block()` before slicing.
+- **T5 · Multi-format export** (`export_md.py`): Pandoc-based export of `full.md`
+  to docx / html / epub / pptx. Runs from the md directory so `images/` paths resolve.
+- **Helper tools**: `check_done.py` (folder completion check), `watchdog.py`
+  (heartbeat + stall detection), `glm_mineru_proxy.py` (GLM adapter for hybrid mode),
+  `formula_recheck.py` (optional formula check hook), `wait_cloud.sh`.
+- **Structure**: `_data/` (plan/progress), `_docs/` (plans/docs), `_logs/` (logs),
+  `_archive/` (historical), `_slices/` (temp slices). All scripts read paths from
+  environment variables (`DTM_ROOT`, `DTM_MINERU_ENV`, `DTM_PANDOC`, …) so the
+  repo runs from any location.
+
+### Removed (during development)
+
+- **T3 · Formula recheck with MixTeX**: MixTeX is not on PyPI (the documented
+  `pip install mixtex` does not exist); Pix2Text was evaluated but does not do
+  formula-level rechecking (whole-page recognition with typos). Not shipped to
+  avoid adding a feature with no real value.
+
+### Fixed
+
+- **mistune auto-closes unclosed code fences**: mistune 3.x silently closes
+  unterminated code blocks, so fence-closure detection now counts fence lines
+  (odd count = unclosed).
+- **pikepdf 10.x `strict` param removed**: recovery now uses `attempt_recovery=True`.
+- **export_md custom output path**: output now uses an absolute path so `--out`
+  works across directories.
+
+### Deps
+
+- Python 3.10+: `mistune 3.3.4`, `camelot-py 2.0.0`, `pikepdf 10.11.0`
+- Optional: `Pandoc` (3.x) for export, `Pix2Text` venv for formula check,
+  `GLM_API_KEY` for hybrid mode, `MINERU_API_TOKEN` for cloud mode.
