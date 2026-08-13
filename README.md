@@ -9,13 +9,13 @@
   <a href="https://github.com/SpiralQWQ/document-to-markdown/stargazers">
     <img src="https://img.shields.io/github/stars/SpiralQWQ/document-to-markdown?style=flat-square" alt="GitHub stars">
   </a>
-  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/main/LICENSE">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/master/LICENSE">
     <img src="https://img.shields.io/github/license/SpiralQWQ/document-to-markdown?style=flat-square" alt="License">
   </a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="Forced OCR">
   <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="Quality gates">
-  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/main">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/master">
     <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="Last commit">
   </a>
 </p>
@@ -345,9 +345,8 @@ Set them in your shell profile or a `.env` (see `.env.example`).
 | `DTM_PANDOC` | Pandoc executable path | `pandoc` on PATH |
 | `DTM_PIX2TEXT_ENV` | Pix2Text venv (optional, formula check) | empty (disabled) |
 | `DTM_CLEANER_PATH` | text-cleaning-engine repo path | empty (hook skips) |
-| `DTM_BRIDGE_DIR` |
-| `DTM_VISION_ANALYZER` | vision_analyzer.py path (L3 vision review) |
- mineru-glm-bridge dir (GLM proxy) | empty |
+| `DTM_BRIDGE_DIR` | Dir holding the GLM proxy script (`glm_mineru_proxy.py`) | empty (proxy disabled) |
+| `DTM_VISION_ANALYZER` | vision_analyzer.py path (L3 vision review) | `vision_analyzer.py` on PATH |
 
 ### API keys
 
@@ -406,8 +405,7 @@ Yes — use the optional [text-cleaning-engine](#integrated-text-cleaning-option
 
 ## Roadmap
 
-- [ ] **Packaging**: `pyproject.toml` + PyPI publish
-- [ ] **CI**: GitHub Actions — run `tests/` on every push
+- [ ] **PyPI publish** (packaging metadata is ready)
 - [ ] **Docker image**: one-command local pipeline
 - [ ] **Table verification**: TEDS scoring (stronger than camelot accuracy)
 - [ ] **Batch reporting**: aggregated QA report across many books

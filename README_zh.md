@@ -9,13 +9,13 @@
   <a href="https://github.com/SpiralQWQ/document-to-markdown/stargazers">
     <img src="https://img.shields.io/github/stars/SpiralQWQ/document-to-markdown?style=flat-square" alt="GitHub stars">
   </a>
-  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/main/LICENSE">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/master/LICENSE">
     <img src="https://img.shields.io/github/license/SpiralQWQ/document-to-markdown?style=flat-square" alt="License">
   </a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="强制 OCR">
   <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="质检三层">
-  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/main">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/master">
     <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="最近提交">
   </a>
 </p>
@@ -208,7 +208,7 @@ export MINERU_API_TOKEN="your_mineru_api_token"
 云端模式走 mineru.net API：每天最多 **5000 个文件**；前 1000 页/天最高优先级，
 超过走慢速队列（照样解析，不会丢）。
 
-### 第 5 步 — GLM API Key（可选，hybrid 模式用）
+### 第 6 步 — GLM API Key（可选，hybrid 模式用）
 
 如果用 GLM 适配代理（`glm_mineru_proxy.py`）：
 
@@ -336,9 +336,8 @@ python -m dtmd report                            # 三色报告（JSON + MD）
 | `DTM_PANDOC` | Pandoc 可执行路径 | PATH 上的 `pandoc` |
 | `DTM_PIX2TEXT_ENV` | Pix2Text venv（可选，公式复核）| 空（禁用）|
 | `DTM_CLEANER_PATH` | text-cleaning-engine 仓库路径 | 空（钩子跳过）|
-| `DTM_BRIDGE_DIR` |
-| `DTM_VISION_ANALYZER` | vision_analyzer.py 路径（L3 视觉复审必需）|
- mineru-glm-bridge 目录（GLM 代理）| 空 |
+| `DTM_BRIDGE_DIR` | GLM 代理脚本（`glm_mineru_proxy.py`）所在目录 | 空（代理禁用）|
+| `DTM_VISION_ANALYZER` | vision_analyzer.py 路径（L3 视觉复审必需）| PATH 上的 `vision_analyzer.py` |
 
 ### API Key
 
@@ -376,8 +375,7 @@ camelot 需要 **Ghostscript**。装好并加入 PATH。有些 PDF 需要 `latti
 
 ## 路线图
 
-- [ ] **打包**：`pyproject.toml` + PyPI 发布
-- [ ] **CI**：GitHub Actions——每次 push 跑 `tests/`
+- [ ] **PyPI 发布**（打包元数据已就绪）
 - [ ] **Docker 镜像**：一键本地 pipeline
 - [ ] **表格校验**：TEDS 打分（比 camelot accuracy 更强）
 - [ ] **批量报告**：跨多本书的汇总质检报告
