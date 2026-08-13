@@ -15,6 +15,9 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="强制 OCR">
   <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="质检三层">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/actions/workflows/ci.yml">
+    <img src="https://github.com/SpiralQWQ/document-to-markdown/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
   <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/master">
     <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="最近提交">
   </a>
@@ -137,6 +140,12 @@ cd document-to-markdown
 
 ```bash
 pip install "mineru[all]" pymupdf mistune "camelot-py[base]" pikepdf
+```
+
+然后以可编辑模式安装本包，让 `python -m dtmd` 能在任意位置运行。在仓库根目录执行：
+
+```bash
+python -m pip install -e .
 ```
 
 > **强制 OCR 是本项目的基本理念**：每个文档（PDF/Word/PPT）都开 OCR 解析，
@@ -290,6 +299,8 @@ python -m dtmd.quality.gates.pdf_repair broken.pdf out.pdf    # 修复损坏 PDF
 ### 命令
 
 ```bash
+python -m dtmd convert --mode local|cloud   # 转换（本地/云端管线）
+python -m dtmd list [--scope all|complex|normal]   # 列出块与状态
 python -m dtmd l1 [--scope all|complex|normal]   # L1 自动检查 → 待复审队列
 python -m dtmd l2                                # L2 camelot 表格复核
 python -m dtmd l3                                # L3 计划+成本预估（不跑视觉）
@@ -367,8 +378,8 @@ camelot 需要 **Ghostscript**。装好并加入 PATH。有些 PDF 需要 `latti
 ### Q：找不到 `_data/plan.json`
 计划是**你的私有数据**（转哪些文件/页），不随仓库发布。自己建——见[安装第 4 步](#第-4-步--准备数据目录_dataplanjson)的最小示例。
 
-### Q：`list --scope all` 显示 275 块，不是 461？
-`pending_complex` 是 `pending_normal` 的**子集**（复杂文档也在普通清单里）。`dtmd` 按 `(file, start, end)` 去重，"all" = 275 唯一块。
+### Q：`list --scope all` 显示块数比预期少？
+`complex` 是 `normal` 的**子集**（复杂文档也会出现在普通清单里）。`dtmd` 按 `(file, start, end)` 去重，`all` 只显示去重后的唯一块。
 
 ### Q：能去掉转出文本里的水印/导航噪声吗？
 可以——用可选的 [text-cleaning-engine](#联动清洗可选接入-text-cleaning-engine) 钩子（`python -m dtmd.tools.clean_hook path/to/full.md` → `full_clean.md`）。
@@ -396,7 +407,7 @@ camelot 需要 **Ghostscript**。装好并加入 PATH。有些 PDF 需要 `latti
 ## 支持
 
 如果这个项目帮到过你，可以请我喝杯咖啡 ☕。打赏全凭心意，不打赏也完全没关系——
-项目永远免费开源。做开源这么久，每一份小小的支持都能让我高兴很久。
+项目永远免费开源。
 
 <p align="center">
   <img src="assets/donate_wechat.jpg" alt="微信收款" width="200">

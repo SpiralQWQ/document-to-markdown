@@ -61,7 +61,7 @@ start, ask in the issue — maintainers are happy to guide.
 
 ### Pull requests
 
-1. Fork the repo and create your branch from `main`.
+1. Fork the repo and create your branch from `master`.
 2. If you've added code that should be tested, add tests under `tests/`
    (run them with `python -m pytest tests/`).
 3. Ensure your code passes `python -m py_compile` on changed files.

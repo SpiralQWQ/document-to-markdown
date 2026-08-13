@@ -15,6 +15,9 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="Forced OCR">
   <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="Quality gates">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/actions/workflows/ci.yml">
+    <img src="https://github.com/SpiralQWQ/document-to-markdown/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
   <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/master">
     <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="Last commit">
   </a>
@@ -87,7 +90,7 @@ as the parsing engine, with quality-gate patches and multi-format export.
 
 ```
 Input documents (PDF / DOCX / PPTX)
-  ├─ T4 repair_pdf: fix corrupted/encrypted PDFs before parsing
+  ├─ T4 pdf_repair: fix corrupted/encrypted PDFs before parsing
   ├─ MinerU (local pipeline or cloud API): parse → full.md + images/ + json
   ├─ T1 md_lint: syntax gate (table column consistency, code fences)
   ├─ T2 table_recheck: camelot cross-check low-confidence tables
@@ -394,10 +397,10 @@ The plan is **your private data** (which files/pages to convert) and is not
 shipped with the repo. Create one — see the minimal example in
 [Installation → Step 4](#step-4--prepare-data-dir-_dataplanjson).
 
-### Q: Why does `list --scope all` show 275 blocks, not "461"?
-`pending_complex` is a **subset** of `pending_normal` (complex documents also
-appear in the normal list). `dtmd` deduplicates by `(file, start, end)`,
-so "all" = the 275 unique blocks.
+### Q: Why does `list --scope all` show fewer blocks than expected?
+`complex` is a **subset** of `normal` (complex documents also appear in the
+normal list). `dtmd` deduplicates blocks by `(file, start, end)`, so `all`
+shows only the unique blocks.
 
 ### Q: Can I clean watermarks / navigation noise from the output?
 Yes — use the optional [text-cleaning-engine](#integrated-text-cleaning-optional-via-text-cleaning-engine) hook
