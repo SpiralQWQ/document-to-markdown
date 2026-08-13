@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-13
+
 ### Added
-- Community docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `pyproject.toml`.
+- CI workflow (`.github/workflows/ci.yml`): pytest across Python 3.10/3.11/3.12.
+- Unit tests for `config` and `cli` (`tests/test_config.py`, `tests/test_cli.py`).
+- Community docs: `SECURITY.md`, issue templates and PR template (`.github/`).
 
 ### Fixed
 - `md_lint` degraded-branch message aligned with `l1.py` low-priority classification (table-style text correctly filed as candidate when `mistune` is unavailable).

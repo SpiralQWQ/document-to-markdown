@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "document-to-markdown"
-version = "0.4.0"
+version = "0.4.1"
 description = "Convert PDF/Word/PPT documents to AI-ready Markdown with forced OCR, quality gates and a three-layer QA system"
 readme = "README.md"
 requires-python = ">=3.10"

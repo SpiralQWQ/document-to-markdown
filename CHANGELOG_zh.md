@@ -6,8 +6,12 @@
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-13
+
 ### 新增
-- 社区文档：`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`pyproject.toml`。
+- CI 工作流（`.github/workflows/ci.yml`）：Python 3.10/3.11/3.12 多版本跑 pytest。
+- `config` / `cli` 单元测试（`tests/test_config.py`、`tests/test_cli.py`）。
+- 社区文档：`SECURITY.md`、issue 模板与 PR 模板（`.github/`）。
 
 ### 修复
 - `md_lint` 降级分支消息与 `l1.py` 低优先分类对齐（无 `mistune` 时表格样式文本正确归为候选）。
