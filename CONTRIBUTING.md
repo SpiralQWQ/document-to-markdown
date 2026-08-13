@@ -29,13 +29,13 @@ uphold this code. Please report unacceptable behavior to the maintainers.
 ## What should I know before getting started?
 
 `document-to-markdown` converts PDF/Word/PPT to AI-ready Markdown via MinerU,
-with quality gates (T1/T2/T4/T5) and a three-layer QA system (`qa_runner`).
+with quality gates (T1/T2/T4/T5) and a three-layer QA system (`dtmd` CLI).
 Before diving in, skim the [README](README.md) to understand the architecture:
 
-- **conversion**: `auto_convert.py` (local) / `mineru_day.py` (cloud)
-- **quality gates**: `quality/md_lint.py`, `quality/table_recheck.py`, `quality/pdf_repair.py`
+- **conversion**: `src/dtmd/convert/local.py` (local) / `src/dtmd/convert/cloud.py` (cloud)
+- **quality gates**: `src/dtmd/quality/gates/md_lint.py`, `table_recheck.py`, `pdf_repair.py`
 - **QA system**: `qa/` package (`l1/l2/l3/rework/report`)
-- **paths**: all paths come from `paths.py` (env-var driven, no hard-coded absolute paths)
+- **config**: all paths come from `src/dtmd/config.py` (env-var driven, no hard-coded absolute paths)
 
 ## How can I contribute?
 
@@ -70,7 +70,7 @@ start, ask in the issue — maintainers are happy to guide.
 6. Open the PR. Reference any related issue.
 
 > **Privacy**: this project is open source. Never commit machine-specific absolute
-> paths, API keys, or private data. Use env vars (see `paths.py` / `.env.example`).
+> paths, API keys, or private data. Use env vars (see `src/dtmd/config.py` / `.env.example`).
 
 ## Styleguides
 
@@ -85,7 +85,7 @@ start, ask in the issue — maintainers are happy to guide.
 - Python 3.10+, follow [PEP 8](https://peps.python.org/pep-0008/).
 - Chinese docstrings/comments are welcome (the codebase uses them).
 - Keep functions small and single-purpose; no magic numbers — use named constants.
-- Prefer `paths.py` for all path resolution (no hard-coded absolute paths).
+- Prefer `src/dtmd/config.py` for all path resolution (no hard-coded absolute paths).
 
 ### Documentation styleguide
 

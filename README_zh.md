@@ -371,7 +371,7 @@ camelot 需要 **Ghostscript**。装好并加入 PATH。有些 PDF 需要 `latti
 `pending_complex` 是 `pending_normal` 的**子集**（复杂文档也在普通清单里）。`dtmd` 按 `(file, start, end)` 去重，"all" = 275 唯一块。
 
 ### Q：能去掉转出文本里的水印/导航噪声吗？
-可以——用可选的 [text-cleaning-engine](#联动清洗可选接入-text-cleaning-engine) 钩子（`tools/clean_hook.py path/to/full.md` → `full_clean.md`）。
+可以——用可选的 [text-cleaning-engine](#联动清洗可选接入-text-cleaning-engine) 钩子（`python -m dtmd.tools.clean_hook path/to/full.md` → `full_clean.md`）。
 
 ## 路线图
 

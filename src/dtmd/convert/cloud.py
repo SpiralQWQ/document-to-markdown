@@ -86,12 +86,10 @@ def main(argv=None):
     dry = "--dry-run" in args
     global FORCE
     FORCE = "--force" in args
-    ocr = "--ocr" in args
+    # 强制 OCR = 本项目基本理念（与 README 声称一致）：默认 is_ocr=true，
+    # --ocr 保留为显式确认（默认已开）；复杂文档本就强制 OCR
+    ocr = True
     complex_mode = "--complex" in args
-    # 复杂文档（扫描件/图片密集/公式密集）默认开 OCR——它们正是 OCR 适用场景；
-    # --ocr 仍可显式强制（普通文档想 OCR 也可用）
-    if complex_mode:
-        ocr = True
     limit = None
     # 默认预算：充分利用每日 5000 文件上限（接受超额走慢速队列）。
     # 前 1000 页优先队列快跑，超额部分优先级降低但仍会解析（不丢）。

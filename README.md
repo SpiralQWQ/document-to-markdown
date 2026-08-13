@@ -401,7 +401,7 @@ so "all" = the 275 unique blocks.
 
 ### Q: Can I clean watermarks / navigation noise from the output?
 Yes — use the optional [text-cleaning-engine](#integrated-text-cleaning-optional-via-text-cleaning-engine) hook
-(`tools/clean_hook.py path/to/full.md` → `full_clean.md`).
+(`python -m dtmd.tools.clean_hook path/to/full.md` → `full_clean.md`).
 
 ## Roadmap
 

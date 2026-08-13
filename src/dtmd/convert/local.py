@@ -102,8 +102,12 @@ def ensure_proxy():
         os.environ.pop(k, None)
 
 
-def convert_block(block, out_dir, backend=BACKEND, ocr=False):
-    """转换单块，返回 (ok, error_msg)"""
+def convert_block(block, out_dir, backend=BACKEND, ocr=True):
+    """转换单块，返回 (ok, error_msg)。
+
+    ocr 默认 True（强制 OCR = 本项目基本理念，与 README 声称一致）；
+    --ocr 语义保留为显式确认（默认已开）。
+    """
     # 坏 PDF 急救（v0.1.0 补丁 T4）：PDF 打不开（加密/损坏）先修复
     tmp = block["file"]
     if block.get("kind") == "PDF" and os.path.exists(block["file"]):
@@ -431,7 +435,7 @@ def main(argv=None):
                 continue
             # 转换
             print(f"  [Day{day_idx}/{b_idx}] {os.path.basename(block['file'])} → {block['start']}-{block['end']}（{block['pages']}页）")
-            ok, err = convert_block(block, out_dir, ocr=force_ocr)
+            ok, err = convert_block(block, out_dir)
             if not ok:
                 print(f"    [失败] {err}")
                 progress["issues"].append(f"Day{day_idx} {os.path.basename(block['file'])} p{block['start']}-{block['end']}: {err[:100]}")
