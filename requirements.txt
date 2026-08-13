@@ -12,4 +12,4 @@ camelot-py[base]>=2.0.0     # T2: 表格复核
 pikepdf>=10.0.0             # T4: 坏 PDF 急救
 
 # === 云端 API 请求 ===
-requests>=2.31.0            # mineru_day.py 云端上传/轮询
+requests>=2.31.0            # dtmd convert --mode cloud 上传/轮询

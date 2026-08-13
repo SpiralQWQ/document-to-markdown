@@ -8,9 +8,9 @@ import sys
 import tempfile
 
 PROJ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, PROJ)
+sys.path.insert(0, os.path.join(PROJ, "src"))
 
-from export.export_md import export_md, SUPPORTED
+from dtmd.export import export_md, SUPPORTED
 
 
 def test_supported_formats():

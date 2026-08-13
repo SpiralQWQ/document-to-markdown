@@ -19,11 +19,12 @@ export_md.py — Markdown 多格式导出（Pandoc）
   python export_md.py full.md --to pptx            → full.pptx
 """
 import os
+import shutil
 import subprocess
 import sys
 
 # Pandoc 路径：优先环境变量 DTM_PANDOC，否则用系统 PATH 中的 pandoc
-import paths as _paths
+from dtmd import config as _paths
 PANDOC = _paths.PANDOC
 
 # 支持的目标格式 → 扩展名
@@ -42,7 +43,9 @@ def export_md(md_path, to="docx", out_path=None):
         return False, None, f"文件不存在: {md_path}"
     if to not in SUPPORTED:
         return False, None, f"不支持的格式: {to}（支持: {', '.join(SUPPORTED)}）"
-    if not os.path.exists(PANDOC):
+    # Pandoc 存在性：裸命令名（PATH 查找）用 shutil.which；含路径用 os.path.exists
+    if not (shutil.which(PANDOC) if os.sep not in PANDOC and not os.path.isabs(PANDOC)
+            else os.path.exists(PANDOC)):
         return False, None, f"Pandoc 不存在: {PANDOC}"
 
     md_dir = os.path.dirname(os.path.abspath(md_path))

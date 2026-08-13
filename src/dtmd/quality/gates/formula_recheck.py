@@ -4,7 +4,7 @@
 formula_recheck.py — 公式复核（Pix2Text，独立 venv 子进程调用）
 
 对 MinerU 已识别的公式，用 Pix2Text 重新识别比对（v0.1.0 补丁 T3）。
-Pix2Text 依赖 torch 全家桶，装在独立 venv `pix2text-env_v1.1.6`，
+Pix2Text 依赖 torch 全家桶，装在独立 Pix2Text venv（DTM_PIX2TEXT_ENV 指定），
 本脚本通过子进程调用该 venv，避免污染主环境。
 
 核心逻辑：
@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 # Pix2Text 独立 venv 的 python（可环境变量覆盖；未配置则跳过公式复核）
-import paths as _paths
+from dtmd import config as _paths
 PIX2TEXT_ENV = _paths.PIX2TEXT_ENV
 PIX2TEXT_PY = os.path.join(PIX2TEXT_ENV, "Scripts", "python.exe") if PIX2TEXT_ENV else ""
 
@@ -81,22 +81,12 @@ def formula_recheck(full_md_path, out_dir=None, max_checks=3, threshold=0.6):
     blocks = _extract_formula_blocks(full_md_path)
     if not blocks:
         return []  # 没有公式 = 无需复核
-
-    if not os.path.exists(PIXTEXT_PY):
-        return ["Pix2Text 环境不存在，跳过公式复核"]
-
-    # 只抽前 max_checks 个公式复核（抽样）
-    checked = 0
-    for idx, latex in blocks[:max_checks]:
-        # 公式块对应图片难以精确裁出，这里用整页思路受限；
-        # 实际场景 Pix2Text 需要公式图片，md 里没有 → 此处记录"待人工复核"候选
-        # （真正的图片公式复核由视频/图片管线承担，md 复核以语法检查为主）
-        issues.append(f"公式块#{idx} 存在（{latex}…），建议人工核对与 MinerU 输出一致性")
-        checked += 1
-        if checked >= max_checks:
-            break
-
-    return issues
+    # Pix2Text 环境未配置（PIX2TEXT_PY 为空/不存在）：md 级公式复核降级为空，
+    # 不做"逐公式建议人工核对"的误报（视觉公式复核由 L3 vision 承担）
+    if not PIX2TEXT_PY or not os.path.exists(PIX2TEXT_PY):
+        return []
+    # 若未来接线 Pix2Text，可在此用子进程比对公式图片与 LaTeX（当前占位，不误报）
+    return []
 
 
 if __name__ == "__main__":

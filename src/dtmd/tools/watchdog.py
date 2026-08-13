@@ -16,7 +16,7 @@ import os, sys, json, time, subprocess, glob
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-import paths as _paths
+from dtmd import config as _paths
 TOOLS = _paths.TOOLS
 DATA_DIR = _paths.DATA_DIR
 HEARTBEAT = _paths.HEARTBEAT_FILE
@@ -31,10 +31,11 @@ def check_glm_conns():
     try:
         r = subprocess.run(
             ["netstat", "-ano"], capture_output=True, text=True, timeout=10)
-        # 统计 ESTABLISHED 到 8031 的连接
+        # 统计 ESTABLISHED 到 GLM 代理端口（config.PROXY_PORT，单一事实源）的连接
+        port = _paths.PROXY_PORT
         conns = 0
         for line in r.stdout.splitlines():
-            if "127.0.0.1:8031" in line and "ESTABLISHED" in line:
+            if f"127.0.0.1:{port}" in line and "ESTABLISHED" in line:
                 conns += 1
         return conns
     except Exception:
@@ -58,7 +59,7 @@ def check_process():
     try:
         r = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command",
-             "Get-CimInstance Win32_Process | Where-Object {$_.CommandLine -match 'auto_convert' -and $_.Name -match 'python'} | Select-Object -First 1"],
+             "Get-CimInstance Win32_Process | Where-Object {($_.CommandLine -match 'dtmd convert' -or $_.CommandLine -match 'auto_convert') -and $_.Name -match 'python'} | Select-Object -First 1"],
             capture_output=True, text=True, timeout=15)
         return "ProcessId" in r.stdout
     except Exception:
@@ -66,6 +67,7 @@ def check_process():
 
 
 def main():
+    os.makedirs(_paths.DATA_DIR, exist_ok=True)  # 全新 clone 时确保 _data/ 存在
     while True:
         conns = check_glm_conns()
         fresh = count_outputs()
@@ -74,7 +76,8 @@ def main():
         if os.path.exists(PROGRESS):
             try:
                 conv = json.load(open(PROGRESS, encoding="utf-8")).get("converted", 0)
-            except: pass
+            except Exception as e:
+                print(f"[WARN] 心跳读取失败: {e}", file=sys.stderr)
         status = {
             "ts": time.time(),
             "glm_conns": conns,

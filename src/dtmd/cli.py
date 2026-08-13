@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+runner.py — QA 主控（L1/L2/L3 三层 + 返工闭环）
+
+用法:
+  python -m dtmd list [--scope all|complex|normal] [--verbose]
+  （L1/L2/L3/返工/报告 子命令由后续 Task 增量接入）
+
+参数设计: cmd 为位置参数，--scope/--verbose 在同一解析器上 → 参数位置随意，
+          避免 argparse 子解析器默认值覆盖主解析器值的经典坑。
+"""
+import argparse
+import os
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+from dtmd.quality import blocks
+from dtmd.quality.levels import l1
+from dtmd.quality.levels import l2
+from dtmd.quality.levels import l3
+from dtmd.quality import sample
+from dtmd.quality import rework as rework_mod
+from dtmd.quality import report
+from dtmd import config as _paths
+
+
+def cmd_list(args):
+    """列出块清单与完成状态（Task-01/02 最小验证点）"""
+    blks = blocks.load_blocks(args.scope)
+    counts = blocks.build_file_counts(blks)
+    done = missing = invalid = 0
+    for b in blks:
+        try:
+            st, _ = blocks.block_status(b, counts)
+        except (KeyError, ValueError, TypeError) as e:
+            invalid += 1
+            if args.verbose:
+                print(f"  [invalid] {b.get('file', '?')} → {e}")
+            continue
+        if st == "done":
+            done += 1
+        else:
+            missing += 1
+    print(f"[块清单] scope={args.scope}: {len(blks)} 块 | 完成 {done} | 缺失 {missing}"
+          + (f" | 脏数据 {invalid}" if invalid else ""))
+    if args.verbose:
+        for b in blks:
+            try:
+                st, od = blocks.block_status(b, counts)
+            except (KeyError, ValueError, TypeError):
+                continue  # 已在上面统计过 invalid
+            print(f"  [{st}] {os.path.basename(b['file'])} p{b['start']}-{b['end']}"
+                  + (f" → {od}" if st == "done" else ""))
+
+
+def cmd_l1(args):
+    """L1 自动检查：完整性 / 页数核对 / md_lint / 图片引用"""
+    blks = blocks.load_blocks(args.scope)
+    counts = blocks.build_file_counts(blks)
+    summary, issues = l1.run_l1(blks, counts, verbose=args.verbose)
+    print(f"[L1] scope={args.scope}: 完成 {summary['done']} | 缺输出 {summary['missing']}"
+          f" | 高优先标红 {summary['flagged_high']} | 低优先候选 {summary['flagged_low']}")
+    if args.verbose:
+        shown = issues[: args.limit] if args.limit else issues
+        for it in shown:
+            tag = "高优先" if it["problems"] else "低优先候选"
+            allp = it["problems"] + it["low_problems"]
+            print(f"  [{tag}] {os.path.basename(it['block']['file'])} "
+                  f"p{it['block']['start']}-{it['block']['end']}: {'; '.join(allp)}")
+    out_path = args.out or os.path.join(_paths.QA_DATA_DIR, "l1_queue.json")
+    n = l1.write_l1_queue(issues, out_path)
+    print(f"[L1] 待复审队列已写出: {out_path}（{n} 块）")
+    return 0
+
+
+def cmd_l2(args):
+    """L2 表格复核（camelot）：对表格密集块跑 table_recheck"""
+    import json as _json
+    queue_path = args.queue or os.path.join(_paths.QA_DATA_DIR, "l1_queue.json")
+    if not os.path.exists(queue_path):
+        print(f"[L2] 找不到 L1 队列: {queue_path}（先跑 `l1`）")
+        return 1
+    items = _json.load(open(queue_path, encoding="utf-8"))["blocks"]
+    targets = l2.select_l2_targets(items, min_table_like=args.table_min)
+    print(f"[L2] 目标: {len(targets)} 块（表格标记 ≥ {args.table_min} 行）")
+    if args.limit:
+        targets = targets[: args.limit]
+        print(f"[L2] 本次处理: {len(targets)} 块（--limit 截断）")
+    if not targets:
+        print("[L2] 无目标块")
+        return 0
+    summary, results = l2.run_l2(targets, verbose=args.verbose)
+    if "error" in summary:
+        print(f"[L2] {summary['error']}")
+        return 1
+    print(f"[L2] 完成: 检查 {summary['checked']} | 表格标红 {summary['flagged']}"
+          f" | 跳过(无PDF) {summary['skipped']}")
+    out_path = args.out or os.path.join(_paths.QA_DATA_DIR, "l2_results.json")
+    n = l2.write_l2_results(results, out_path)
+    print(f"[L2] 结果已写出: {out_path}（{n} 条）")
+    return 0
+
+
+def cmd_l3(args):
+    """L3 复审：--run 执行（花视觉 token）| 默认计划+成本预估"""
+    import json as _json
+    queue_path = args.queue or os.path.join(_paths.QA_DATA_DIR, "l1_queue.json")
+    if not os.path.exists(queue_path):
+        print(f"[L3] 找不到 L1 队列: {queue_path}（先跑 `l1`）")
+        return 1
+    items = _json.load(open(queue_path, encoding="utf-8"))["blocks"]
+    plan, summary = sample.build_l3_plan(
+        items, pages_per_block=args.pages,
+        equation_threshold=args.eq_min, max_high=args.max_high,
+        max_formula=args.max_formula)
+    if args.run:
+        # 执行模式：逐目标逐页跑 A+B 双视觉
+        print(f"[L3执行] {summary['targets']} 目标 / {summary['pages']} 页 | "
+              f"~{summary['est_vision_calls']} 调用 | 分级 {summary['priority']}")
+        results, rsum = l3.run_l3_plan(plan, backend=args.backend,
+                                       verbose=True, limit=args.limit)
+        print(f"[L3执行] 完成: {rsum['by_block']}")
+        out_path = args.out or os.path.join(_paths.QA_DATA_DIR, "l3_results.json")
+        n = l3.write_l3_results(results, out_path)
+        print(f"[L3执行] 结果已写出: {out_path}（{n} 条）")
+        return 0
+    # 计划模式
+    print(f"[L3计划] 目标 {summary['targets']} 块 / {summary['pages']} 页 | "
+          f"预估视觉调用 ~{summary['est_vision_calls']} 次 | 分级 {summary['priority']}")
+    if args.verbose:
+        shown = plan[: (args.limit or 15)] if args.limit else plan
+        for p in shown:
+            print(f"  [{p['priority']}] {p['basename'][:35]} p{p['start']}-{p['end']}"
+                  f" → {len(p['pages'])}页 {p['pages']}")
+    return 0
+
+
+def cmd_rework(args):
+    """返工闭环：生成返工清单（L1 高优先 + L3 fail）+ 重转命令"""
+    import json as _json
+    queue_path = args.queue or os.path.join(_paths.QA_DATA_DIR, "l1_queue.json")
+    if not os.path.exists(queue_path):
+        print(f"[返工] 找不到 L1 队列: {queue_path}（先跑 `l1`）")
+        return 1
+    items = _json.load(open(queue_path, encoding="utf-8"))["blocks"]
+    l3res = None
+    l3_path = os.path.join(_paths.QA_DATA_DIR, "l3_results.json")
+    if os.path.exists(l3_path):
+        l3res = _json.load(open(l3_path, encoding="utf-8")).get("results")
+    rework, n = rework_mod.build_rework_list(items, l3res)
+    print(f"[返工] 清单 {n} 块")
+    for r in rework:
+        print(f"  - {r['basename'][:38]} p{r['start']}-{r['end']}: {r['reason'][:45]}")
+    if args.cmds:
+        cmds = rework_mod.gen_rework_commands(rework)
+        print(f"[重转命令] {len(cmds)} 条（可用 bash 批量执行）:")
+        for c in cmds:
+            print(f"  {c}")
+    out = args.out or os.path.join(_paths.QA_DATA_DIR, "rework.json")
+    n2 = rework_mod.write_rework(rework, out)
+    print(f"[返工] 清单已写出: {out}（{n2} 条）")
+    return 0
+
+
+def cmd_report(args):
+    """生成三色质检报告（放心/返工/误报）"""
+    import json as _json
+    allb = blocks.load_blocks("all")
+    qp = args.queue or os.path.join(_paths.QA_DATA_DIR, "l1_queue.json")
+    if not os.path.exists(qp):
+        print(f"[报告] 找不到 L1 队列: {qp}（先跑 `l1`，避免生成误导性的全放心报告）")
+        return 1
+    l1q = _json.load(open(qp, encoding="utf-8"))["blocks"]
+    l2res = l3res = None
+    p = os.path.join(_paths.QA_DATA_DIR, "l2_results.json")
+    if os.path.exists(p):
+        l2res = _json.load(open(p, encoding="utf-8")).get("results")
+    p = os.path.join(_paths.QA_DATA_DIR, "l3_results.json")
+    if os.path.exists(p):
+        l3res = _json.load(open(p, encoding="utf-8")).get("results")
+    rep = report.build_report(allb, l1q, l2res, l3res)
+    js = args.out or os.path.join(_paths.QA_DATA_DIR, "qa_report.json")
+    md = args.md or os.path.join(_paths.QA_DATA_DIR, "qa_report.md")
+    report.write_report(rep, js, md)
+    print(f"[报告] 三色: 放心 {len(rep['pass'])} | 返工 {len(rep['fail'])} | 候选 {len(rep['review'])}")
+    print(f"[报告] JSON: {js}")
+    print(f"[报告] MD:   {md}")
+    return 0
+
+
+def cmd_convert(args):
+    """convert 命令：转发到本地/云端管线（--mode local|cloud，默认 local）"""
+    from dtmd.convert import cloud, local
+    main_fn = cloud.main if args.mode == "cloud" else local.main
+    extra = list(args._extra or [])
+    # 把主解析器已消费的 --limit / --max 拼回，保证转发到管线（终点一致：旧命令 flag 不丢）
+    if args.limit is not None and "--limit" not in extra:
+        extra += ["--limit", str(args.limit)]
+    if args.max is not None and "--max" not in extra:
+        extra += ["--max", str(args.max)]
+    return main_fn(extra)
+
+
+COMMANDS = {
+    "list": (cmd_list, "列出块清单与完成状态"),
+    "l1": (cmd_l1, "L1 自动检查（完整性/页数/md_lint/图片引用）"),
+    "l2": (cmd_l2, "L2 表格复核（camelot）"),
+    "l3": (cmd_l3, "L3 复审计划（选目标+选页+成本预估）"),
+    "rework": (cmd_rework, "返工闭环（生成返工清单+重转命令）"),
+    "report": (cmd_report, "生成三色质检报告"),
+    "convert": (cmd_convert, "转换管线（--mode local|cloud，默认 local）"),
+}
+
+
+def build_parser():
+    ap = argparse.ArgumentParser(
+        prog="dtmd",
+        description="document-to-markdown：PDF/Word/PPT → AI-ready Markdown（转换 + 三层质检）")
+    ap.add_argument("cmd", nargs="?", default=None,
+                    choices=sorted(COMMANDS), help="子命令")
+    from dtmd import __version__
+    ap.add_argument("--version", action="version", version=f"dtmd {__version__}")
+    ap.add_argument("--scope", choices=["all", "complex", "normal"], default="all",
+                    help="扫描范围（默认 all=复杂+普通）")
+    ap.add_argument("--verbose", action="store_true", help="详细输出")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="详细输出时最多显示 N 条（防刷屏）")
+    ap.add_argument("--out", default=None,
+                    help="输出路径（默认 _data/qa/l1_queue.json）")
+    ap.add_argument("--queue", default=None,
+                    help="L1 队列路径（l2 用，默认 _data/qa/l1_queue.json）")
+    ap.add_argument("--table-min", type=int, default=10,
+                    help="L2 表格标记行数阈值（l2 用，默认 10）")
+    ap.add_argument("--pages", type=int, default=3,
+                    help="L3 每块抽页数（l3 用，默认 3）")
+    ap.add_argument("--eq-min", type=int, default=20,
+                    help="L3 公式密集阈值（l3 用，默认 20）")
+    ap.add_argument("--max-high", type=int, default=None,
+                    help="L3 高优先目标上限（l3 用）")
+    ap.add_argument("--max-formula", type=int, default=10,
+                    help="L3 公式密集代表上限（l3 用，默认 10）")
+    ap.add_argument("--cmds", action="store_true",
+                    help="生成重转命令（rework 用）")
+    ap.add_argument("--md", default=None,
+                    help="报告 md 输出路径（report 用）")
+    ap.add_argument("--run", action="store_true",
+                    help="L3 执行模式（跑视觉，花 token）")
+    ap.add_argument("--backend", default="parallel",
+                    choices=["parallel", "qwen", "glm", "gemini", "openai"],
+                    help="L3 视觉后端（默认 parallel 双视觉）")
+    ap.add_argument("--mode", default="local", choices=["local", "cloud"],
+                    help="convert 管线（默认 local）")
+    ap.add_argument("--max", type=int, default=None, dest="max",
+                    help="convert 用：最多转 N 块（local 管线）")
+    return ap
+
+
+def main(argv=None):
+    ap = build_parser()
+    args, unknown = ap.parse_known_args(argv)
+    args._extra = unknown  # convert 的额外参数（day/--dry-run 等）透传
+    # 数值参数防呆：负数/非法范围直接报错
+    for name, val in (("--limit", args.limit), ("--table-min", args.table_min),
+                      ("--pages", args.pages), ("--eq-min", args.eq_min),
+                      ("--max-formula", args.max_formula), ("--max", args.max)):
+        if val is not None and val < 0:
+            ap.error(f"{name} 不能为负（收到 {val}）")
+    if not args.cmd or args.cmd not in COMMANDS:
+        ap.print_help()
+        return 1
+    try:
+        return COMMANDS[args.cmd][0](args)
+    except (FileNotFoundError, RuntimeError) as e:
+        # 防呆：缺数据/源文件（含 fitz 抛的 RuntimeError 子类）给友好提示，不裸 traceback
+        print(f"[错误] 找不到数据/源文件: {e}\n"
+              f"  提示: plan.json 是你的私有数据，不随仓库发布。见 README「准备数据目录」")
+        return 1
+    except ValueError as e:
+        # 防呆：plan.json 缺字段/格式问题
+        print(f"[错误] 数据格式问题: {e}\n"
+              f"  提示: 检查 _data/plan.json 是否包含 pending_normal/pending_complex 字段")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

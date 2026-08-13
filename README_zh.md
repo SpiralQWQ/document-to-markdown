@@ -1,5 +1,54 @@
 # document-to-markdown
 
+<p align="center">
+  <strong>PDF / Word / PPT → AI 可读 Markdown</strong><br>
+  批量文档转写 · 强制 OCR · 质检门禁 · 多格式导出
+</p>
+
+<p align="center">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/stargazers">
+    <img src="https://img.shields.io/github/stars/SpiralQWQ/document-to-markdown?style=flat-square" alt="GitHub stars">
+  </a>
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/SpiralQWQ/document-to-markdown?style=flat-square" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="强制 OCR">
+  <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="质检三层">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/main">
+    <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="最近提交">
+  </a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="CHANGELOG_zh.md">更新日志</a> ·
+  <a href="CONTRIBUTING.md">贡献指南</a> ·
+  <a href="COMMERCIAL.md">商业授权</a>
+</p>
+
+---
+
+## 目录
+
+- [解决的问题](#解决的问题)
+- [特性](#特性)
+- [架构](#架构)
+- [文件说明](#文件说明)
+- [安装](#安装)
+- [用法](#用法)
+- [质检系统 dtmd](#质检系统-dtmd)
+- [配置参考](#配置参考)
+- [输出结构](#输出结构)
+- [FAQ / 常见问题](#faq--常见问题)
+- [路线图](#路线图)
+- [贡献](#贡献)
+- [更新日志](#更新日志)
+- [开源协议](#开源协议)
+- [支持](#支持)
+
+---
+
 把 **PDF / Word（DOCX）/ PowerPoint（PPTX）** 文档转写成 **AI 可直接阅读的 Markdown**，
 喂给大模型（RAG、Agent 流水线、笔记生成）。底层用 **MinerU** 做解析引擎，
 并配有质检补丁（T1/T2/T4）和多格式导出（T5）。
@@ -19,6 +68,20 @@
 | 表格/公式经常转错 | ✅ 质检补丁拦截（T1/T2）|
 | 加密/损坏的 PDF 静默失败 | ✅ 解析前自动修复（T4）|
 | 只要 md，还想要 Word/PDF/PPT | ✅ Pandoc 多格式导出（T5）|
+| 大规模转换质量没底 | ✅ **dtmd 质检**：L1/L2/L3 三层质检 + 返工闭环 |
+
+## 特性
+
+| 领域 | 你得到什么 |
+|---|---|
+| 📄 **多格式输入** | PDF、Word（DOCX）、PowerPoint（PPTX）|
+| 🔍 **强制 OCR** | 每个文档都开 OCR——扫描页/公式永不丢失 |
+| 🧪 **质检补丁（T1/T2/T4/T5）** | md 语法门禁 · 表格复核 · PDF 修复 · 多格式导出 |
+| 🧠 **质检系统（dtmd）** | L1 自动 · L2 表格复核 · L3 视觉复审 · 返工闭环 · 三色报告 |
+| ☁️ **云端模式** | MinerU API 批量上传→轮询→下载（5000 文件/天）|
+| 🧼 **清洗联动** | 接入 text-cleaning-engine（剥水印/导航/乱码）|
+| 🔄 **断点续跑** | 自动跳过已转块；重跑续传不重复 |
+| 🖥️ **跨平台** | Windows / Linux / macOS（环境变量配路径）|
 
 ## 架构
 
@@ -35,17 +98,19 @@
 
 | 文件 | 作用 |
 |---|---|
-| `auto_convert.py` | 主本地转换器：按计划批量转，质检，断点续跑 |
-| `mineru_day.py` | 云端转换器：批量上传 → 轮询 → 下载（MinerU 云端 API）|
-| `mineru_local_batch.py` | 轻量本地批量转换器 |
-| `md_lint.py` | T1：Markdown 语法门禁（mistune）|
-| `table_recheck.py` | T2：表格质检（camelot，质量评分）|
-| `pdf_repair.py` | T4：损坏/加密 PDF 修复（pikepdf）|
-| `export_md.py` | T5：多格式导出（Pandoc）|
-| `formula_recheck.py` | 公式复核钩子（可选，需要 Pix2Text）|
-| `glm_mineru_proxy.py` | GLM 适配代理（MinerU hybrid 模式用）|
-| `watchdog.py` | 看门狗：心跳文件检测卡死/进程死亡 |
-| `check_done.py` | 检查哪些文件夹已全部转完 |
+| `src/dtmd/convert/local.py` | 主本地转换器：按计划批量转，质检，断点续跑 |
+| `src/dtmd/convert/cloud.py` | 云端转换器：批量上传 → 轮询 → 下载（MinerU 云端 API）|
+| `src/dtmd/convert/local_batch.py` | 轻量本地批量转换器 |
+| `src/dtmd/cli.py` | **统一 CLI 入口**：转换 + L1/L2/L3 质检：L1/L2/L3 质检 + 返工闭环 + 三色报告 |
+| `src/dtmd/quality/` | **质检包**：`blocks`(清单/状态) · `l1`(完整性/页数/md_lint/图片) · `l2`(表格复核) · `l3`(公式密度/文本/视觉) · `vision`(fitz 渲染+双视觉) · `sample`(L3抽样) · `rework` · `report` |
+| `src/dtmd/quality/gates/md_lint.py` | T1：Markdown 语法门禁（mistune）|
+| `src/dtmd/quality/gates/table_recheck.py` | T2：表格质检（camelot，质量评分）|
+| `src/dtmd/quality/gates/pdf_repair.py` | T4：损坏/加密 PDF 修复（pikepdf）|
+| `src/dtmd/export.py` | T5：多格式导出（Pandoc）|
+| `src/dtmd/quality/gates/formula_recheck.py` | 公式复核钩子（可选，需要 Pix2Text）|
+| `src/dtmd/tools/glm_mineru_proxy.py` | GLM 适配代理（MinerU hybrid 模式用）|
+| `src/dtmd/tools/watchdog.py` | 看门狗：心跳文件检测卡死/进程死亡 |
+| `src/dtmd/tools/check_done.py` | 检查哪些文件夹已全部转完 |
 
 ## 安装
 
@@ -135,7 +200,7 @@ $env:DTM_ROOT = "E:\path\to\documents"
 
 ### 第 5 步 — 云端 API Token（可选，云端模式用）
 
-如果要用 `mineru_day.py`（云端模式），设置 MinerU API Token：
+如果要用云端模式（`dtmd convert --mode cloud`），设置 MinerU API Token：
 
 ```bash
 export MINERU_API_TOKEN="your_mineru_api_token"
@@ -157,16 +222,16 @@ export GLM_API_KEY="your_glm_api_key"
 ### 本地批量转换
 
 ```bash
-python auto_convert.py                 # 按计划转（每 10 块检查）
-python auto_convert.py --no-check      # 连续转不暂停
-python auto_convert.py --max 5         # 最多转 5 块
+python -m dtmd convert --mode local                 # 按计划转（每 10 块检查）
+python -m dtmd convert --mode local --no-check      # 连续转不暂停
+python -m dtmd convert --mode local --max 5         # 最多转 5 块
 ```
 
 ### 云端转换（MinerU API）
 
 ```bash
-python mineru_day.py --complex --dry-run   # 预览会上传什么
-python mineru_day.py --complex             # 上传并轮询复杂文档
+python -m dtmd convert --mode cloud --complex --dry-run   # 预览会上传什么
+python -m dtmd convert --mode cloud --complex             # 上传并轮询复杂文档
 ```
 
 ### 联动清洗（可选，接入 text-cleaning-engine）
@@ -181,8 +246,8 @@ git clone https://github.com/SpiralQWQ/text-cleaning-engine.git /path/to/text-cl
 export DTM_CLEANER_PATH="/path/to/text-cleaning-engine"
 
 # 2. 用清洗钩子清洗转出的文档（内部调用 text-cleaning-engine 的 clean_md 接口）
-python tools/clean_hook.py path/to/full.md                # → full_clean.md
-python tools/clean_hook.py path/to/full.md --anonymize    # → 加 PII 脱敏
+python -m dtmd.tools.clean_hook path/to/full.md                # → full_clean.md
+python -m dtmd.tools.clean_hook path/to/full.md --anonymize    # → 加 PII 脱敏
 ```
 
 输出：每个 `full.md` 会在同目录生成清洗后的 `full_clean.md`。
@@ -194,18 +259,60 @@ python tools/clean_hook.py path/to/full.md --anonymize    # → 加 PII 脱敏
 ### 多格式导出
 
 ```bash
-python export_md.py path/to/full.md --to docx   # → full.docx
-python export_md.py path/to/full.md --to html   # → full.html
-python export_md.py path/to/full.md --to pptx   # → full.pptx
+python -m dtmd.export path/to/full.md --to docx   # → full.docx
+python -m dtmd.export path/to/full.md --to html   # → full.html
+python -m dtmd.export path/to/full.md --to pptx   # → full.pptx
 ```
 
 ### 质检（单独跑）
 
 ```bash
-python md_lint.py path/to/full.md          # markdown 语法门禁
-python table_recheck.py some.pdf           # 表格质检
-python pdf_repair.py broken.pdf out.pdf    # 修复损坏 PDF
+python -m dtmd.quality.gates.md_lint path/to/full.md          # markdown 语法门禁
+python -m dtmd.quality.gates.table_recheck some.pdf           # 表格质检
+python -m dtmd.quality.gates.pdf_repair broken.pdf out.pdf    # 修复损坏 PDF
 ```
+
+## 质检系统 dtmd
+
+`dtmd` 的质检子命令构成**三层质检系统**。转换完成后跑它，就知道哪些文档可信。
+
+```
+┌─ L1 · 自动（免费）─────────────────────────────┐
+│  完整性 · 页数核对 · md_lint · 图片引用          │
+│  → 标红=待复审候选（不判失败）                  │
+├─ L2 · 专项（免费）─────────────────────────────┤
+│  camelot 对表格密集块复核                       │
+├─ L3 · 视觉复审（花 token）─────────────────────┤
+│  文本层(LaTeX配平) + 视觉层(fitz渲染+双视觉)   │
+└───────────────────────────────────────────────┘
+   → 三色报告：放心 pass / 返工 rework / 误报 review
+```
+
+### 命令
+
+```bash
+python -m dtmd l1 [--scope all|complex|normal]   # L1 自动检查 → 待复审队列
+python -m dtmd l2                                # L2 camelot 表格复核
+python -m dtmd l3                                # L3 计划+成本预估（不跑视觉）
+python -m dtmd l3 --run                          # L3 执行视觉复审（花 token）
+python -m dtmd rework --cmds                     # 返工清单 + 重转命令
+python -m dtmd report                            # 三色报告（JSON + MD）
+```
+
+典型流程：`l1 → l2 → l3 --run → rework → report`。
+
+### 产物
+
+| 产物 | 默认路径 |
+|---|---|
+| L1 待复审队列 | `_data/qa/l1_queue.json` |
+| L2 结果 | `_data/qa/l2_results.json` |
+| L3 结果 | `_data/qa/l3_results.json` |
+| 三色报告 | `_data/qa/qa_report.json` + `qa_report.md` |
+| 返工清单 | `_data/qa/rework.json` |
+
+> L3 视觉复审**默认不开**（`--run` 才跑），因为它调用 Qwen-VL/GLM 视觉 API（按量计费）。
+> 默认 `l3` 先出计划+成本预估；用 `--max-formula N` 控制公式密集抽样上限。
 
 ## 输出结构
 
@@ -215,6 +322,69 @@ python pdf_repair.py broken.pdf out.pdf    # 修复损坏 PDF
   ├── images/           # 提取的图片
   └── *.json            # 中间解析结果
 ```
+
+## 配置参考
+
+所有脚本从环境变量读配置（**无硬编码路径**）。在 shell profile 或 `.env` 里设置（见 `.env.example`）。
+
+### 路径
+
+| 变量 | 作用 | 默认 |
+|---|---|---|
+| `DTM_ROOT` | 根数据目录（你的文档）| 仓库上级目录 |
+| `DTM_TOOLS` | 工具目录（本仓库）| 仓库目录 |
+| `DTM_MINERU_ENV` | MinerU 虚拟环境路径 | PATH 上的 `mineru` |
+| `DTM_PANDOC` | Pandoc 可执行路径 | PATH 上的 `pandoc` |
+| `DTM_PIX2TEXT_ENV` | Pix2Text venv（可选，公式复核）| 空（禁用）|
+| `DTM_CLEANER_PATH` | text-cleaning-engine 仓库路径 | 空（钩子跳过）|
+| `DTM_BRIDGE_DIR` | mineru-glm-bridge 目录（GLM 代理）| 空 |
+
+### API Key
+
+| 变量 | 作用 |
+|---|---|
+| `MINERU_API_TOKEN` | MinerU 云端 API（`dtmd convert --mode cloud`）|
+| `GLM_API_KEY` | GLM-4.6V 视觉（L3 复审 / hybrid 代理）|
+| `QWEN_API_KEY` | Qwen-VL 视觉（L3 复审，parallel 后端）|
+| `GEMINI_API_KEY` | Gemini 视觉（可选 L3 后端）|
+
+> L3 视觉复审默认用 **Qwen-VL + GLM-4.6V 并行**（`--backend parallel`），需设 `QWEN_API_KEY` 和 `GLM_API_KEY`。
+
+## FAQ / 常见问题
+
+### Q：扫描版 PDF 转出来是空的/缺字
+确认 OCR 已开。`dtmd convert --mode local` 和 `dtmd convert --mode cloud` 默认强制 OCR。单块可用 `--ocr` 重跑（见 `python -m dtmd convert --help`）。
+
+### Q：`dtmd l1` 标了一堆"表格样式未解析"
+那是 **md_lint 的 `|` 启发式**——把任何含 `|` 的行当成疑似表格。数学（`|V|`）和代码常误报，所以标红是**低优先候选**，不是失败。用 `l2`（camelot）或 `l3`（视觉）确认真问题。
+
+### Q：`dtmd l3` 显示"~315 次调用"，正常吗？
+正常——那是选中目标的**成本预估**。`l3` 不加 `--run` 只出计划。用 `--max-formula N`、`--pages N`、`--limit N` 控制成本。
+
+### Q：camelot 读不了我的 PDF
+camelot 需要 **Ghostscript**。装好并加入 PATH。有些 PDF 需要 `lattice` 而非 `stream`，工具会自动尝试两种。
+
+### Q：找不到 `_data/plan.json`
+计划是**你的私有数据**（转哪些文件/页），不随仓库发布。自己建——见[安装第 4 步](#第-4-步--准备数据目录_dataplanjson)的最小示例。
+
+### Q：`list --scope all` 显示 275 块，不是 461？
+`pending_complex` 是 `pending_normal` 的**子集**（复杂文档也在普通清单里）。`dtmd` 按 `(file, start, end)` 去重，"all" = 275 唯一块。
+
+### Q：能去掉转出文本里的水印/导航噪声吗？
+可以——用可选的 [text-cleaning-engine](#联动清洗可选接入-text-cleaning-engine) 钩子（`tools/clean_hook.py path/to/full.md` → `full_clean.md`）。
+
+## 路线图
+
+- [ ] **打包**：`pyproject.toml` + PyPI 发布
+- [ ] **CI**：GitHub Actions——每次 push 跑 `tests/`
+- [ ] **Docker 镜像**：一键本地 pipeline
+- [ ] **表格校验**：TEDS 打分（比 camelot accuracy 更强）
+- [ ] **批量报告**：跨多本书的汇总质检报告
+- [ ] **Web UI**：上传 → 转换 → 审阅面板
+
+## 贡献
+
+欢迎贡献！Bug 反馈、功能建议、PR 都欢迎。请先读 [CONTRIBUTING.md](CONTRIBUTING.md)，所有贡献需遵守我们的[行为准则](CODE_OF_CONDUCT.md)。
 
 ## 更新日志
 

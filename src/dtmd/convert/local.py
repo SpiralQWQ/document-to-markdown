@@ -10,16 +10,16 @@ Document-to-Markdown 自动持续转换脚本（本地 + 云端复杂分流）
   4. 断点续跑：已完成块自动跳过
 
 用法:
-  python auto_convert.py                # 自动转换（每10块检查）
-  python auto_convert.py --no-check     # 不检查，连续转
-  python auto_convert.py --max N        # 最多转 N 块后停止
+  python -m dtmd convert --mode local                # 自动转换（每10块检查）
+  python -m dtmd convert --mode local --no-check     # 不检查，连续转
+  python -m dtmd convert --mode local --max N        # 最多转 N 块后停止
 """
 import os, sys, json, time, subprocess, socket
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-# 路径统一走 paths.py（仓库根为基准，环境变量可覆盖）
-import paths as _paths
+# 路径统一走 dtmd.config（仓库根为基准，环境变量可覆盖）
+from dtmd import config as _paths
 ROOT = _paths.TOOLS
 TOOLS = _paths.TOOLS
 DATA_DIR = _paths.DATA_DIR
@@ -30,7 +30,7 @@ BRIDGE_DIR = _paths.BRIDGE_DIR
 PYTHON = _paths.mineru_python()
 MINERU_CLI = _paths.mineru_cli()
 PROXY_SCRIPT = _paths.proxy_script()
-PROXY_PORT = int(os.environ.get("DTM_PROXY_PORT", "8031"))
+PROXY_PORT = _paths.PROXY_PORT  # 单一事实源（dtmd.config）
 SLICE_DIR = _paths.SLICE_DIR
 PLAN = _paths.PLAN
 PROGRESS_FILE = _paths.PROGRESS_FILE
@@ -40,17 +40,10 @@ CHECK_INTERVAL = 10
 BACKEND = "pipeline"  # 纯本地免费（PaddleOCR+版面+表格+公式），不烧 GLM/不占云端额度
 
 
-def safe(name):
-    import re
-    return re.sub(r'[<>:"/\\|?*]', "_", name)
+from dtmd.utils import safe
 
 
-def is_done(out_dir):
-    if not os.path.isdir(out_dir):
-        return False
-    if os.path.exists(os.path.join(out_dir, "full.md")):
-        return True
-    return any(fn.endswith(".json") for fn in os.listdir(out_dir))
+from dtmd.convert.base import is_done
 
 
 def read_glm_key():
@@ -95,7 +88,8 @@ def ensure_proxy():
             print("[错误] 代理启动超时"); sys.exit(1)
     os.environ["MINERU_VL_SERVER"] = f"http://127.0.0.1:{PROXY_PORT}"
     os.environ["MINERU_VL_API_KEY"] = key
-    os.environ["MINERU_VL_MODEL_NAME"] = "glm-4.6v-flashx"
+    # 模型名统一走环境变量（与 glm_mineru_proxy 的 GLM_MODEL 同源，避免硬编码漂移）
+    os.environ["MINERU_VL_MODEL_NAME"] = os.environ.get("GLM_MODEL", "glm-4.6v-flashx")
     # === 串行稳定配置（实测：内存稳定不爆，代价是慢） ===
     os.environ["MINERU_DEVICE_MODE"] = "cpu"          # 设备用 CPU
     os.environ["MINERU_LMDEPLOY_DEVICE"] = "cpu"      # lmdeploy 用 CPU
@@ -108,13 +102,13 @@ def ensure_proxy():
         os.environ.pop(k, None)
 
 
-def convert_block(block, out_dir, backend=BACKEND):
+def convert_block(block, out_dir, backend=BACKEND, ocr=False):
     """转换单块，返回 (ok, error_msg)"""
     # 坏 PDF 急救（v0.1.0 补丁 T4）：PDF 打不开（加密/损坏）先修复
     tmp = block["file"]
     if block.get("kind") == "PDF" and os.path.exists(block["file"]):
         try:
-            from quality.pdf_repair import repair_pdf
+            from dtmd.quality.gates.pdf_repair import repair_pdf
             # 先探测能否直接打开（用 pikepdf 快速检查）
             import pikepdf as _pk
             try:
@@ -144,7 +138,10 @@ def convert_block(block, out_dir, backend=BACKEND):
             pass  # pdf_repair 缺失时静默跳过（不阻塞）
     # 切片大文件
     size_mb = block.get("size_mb", 0)
-    if size_mb > 200 or (block["kind"] == "PDF" and block["pages"] > 190):
+    # 仅 PDF 才走 fitz 切片（非 PDF 大文件直接透传原文件给 mineru CLI）；缺源提前返回
+    if not os.path.exists(block["file"]):
+        return False, f"源文件不存在: {block['file']}"
+    if block["kind"] == "PDF" and (size_mb > 200 or block["pages"] > 190):
         # 切片
         try:
             import fitz
@@ -158,8 +155,11 @@ def convert_block(block, out_dir, backend=BACKEND):
                 out.save(tmp); out.close(); src.close()
         except ImportError:
             print(f"  [WARN] PyMuPDF 不可用，无法切片大文件"); return False, "pymupdf-missing"
+        except Exception as e:
+            print(f"  [WARN] 切片失败: {e}"); return False, f"slice-failed: {str(e)[:80]}"
 
-    cmd = [MINERU_CLI, "-p", tmp, "-o", out_dir, "-m", "auto",
+    cmd = [MINERU_CLI, "-p", tmp, "-o", out_dir,
+           "-m", "ocr" if ocr else "auto",
            "-b", backend, "-f", "true", "-t", "true"]
     if "http-client" in backend:
         cmd += ["-u", f"http://127.0.0.1:{PROXY_PORT}"]
@@ -260,7 +260,7 @@ def verify_output(out_dir, block):
         issues.append(f"读 md 失败: {e}")
     # 语法门禁（mistune）：表格列数/代码块闭合（v0.1.0 补丁 T1）
     try:
-        from quality.md_lint import md_lint as _md_lint
+        from dtmd.quality.gates.md_lint import md_lint as _md_lint
         _ok, _md_issues = _md_lint(full_md)
         issues.extend(_md_issues)
     except ImportError:
@@ -269,7 +269,7 @@ def verify_output(out_dir, block):
     # 大文档全表复核太慢，只抽第 1 页做抽样；非 PDF 跳过
     if block.get("kind") == "PDF" and block.get("pages", 999) <= 200:
         try:
-            from quality.table_recheck import table_recheck as _tbl
+            from dtmd.quality.gates.table_recheck import table_recheck as _tbl
             _tbl_issues = _tbl(block["file"], full_md, out_dir)
             issues.extend(_tbl_issues)
         except ImportError:
@@ -283,11 +283,13 @@ def load_progress():
     if os.path.exists(PROGRESS_FILE):
         try:
             return json.load(open(PROGRESS_FILE, encoding="utf-8"))
-        except: pass
+        except Exception as e:
+            print(f"[WARN] {PROGRESS_FILE} 解析失败: {e}", file=sys.stderr)
     return {"converted": 0, "last_block_idx": 0, "issues": []}
 
 
 def save_progress(progress):
+    os.makedirs(os.path.dirname(PROGRESS_FILE), exist_ok=True)
     json.dump(progress, open(PROGRESS_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
@@ -373,13 +375,17 @@ def log_complex(block, reasons):
         cf.write(entry + "\n")
 
 
-def main():
-    args = sys.argv[1:]
+def main(argv=None):
+    args = list(argv) if argv is not None else sys.argv[1:]
     no_check = "--no-check" in args
     do_clean = "--clean" in args
+    force_ocr = "--ocr" in args  # 强制 OCR（本地模式，README 声称支持）
     max_blocks = None
+    # --max 与 --limit 同义（统一 CLI 可能透传 --limit 到 local）
     if "--max" in args:
         max_blocks = int(args[args.index("--max") + 1])
+    elif "--limit" in args:
+        max_blocks = int(args[args.index("--limit") + 1])
 
     if "http-client" in BACKEND:
         ensure_proxy()  # 仅 GLM 桥接需要代理；pipeline 纯本地不需要
@@ -425,7 +431,7 @@ def main():
                 continue
             # 转换
             print(f"  [Day{day_idx}/{b_idx}] {os.path.basename(block['file'])} → {block['start']}-{block['end']}（{block['pages']}页）")
-            ok, err = convert_block(block, out_dir)
+            ok, err = convert_block(block, out_dir, ocr=force_ocr)
             if not ok:
                 print(f"    [失败] {err}")
                 progress["issues"].append(f"Day{day_idx} {os.path.basename(block['file'])} p{block['start']}-{block['end']}: {err[:100]}")
@@ -445,7 +451,7 @@ def main():
             # 联动清洗（--clean）：转完调 text-cleaning-engine 清洗 full.md（R5）
             if do_clean:
                 try:
-                    from tools.clean_hook import clean_md
+                    from dtmd.tools.clean_hook import clean_md
                     _full = os.path.join(out_dir, "full.md")
                     _ok, _out, _msg = clean_md(_full)
                     if _ok:

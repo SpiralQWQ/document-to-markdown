@@ -4,6 +4,63 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Community docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `pyproject.toml`.
+
+## [0.4.0] - 2026-08-13
+
+**Structural restructure to `src/dtmd/` (SoC directory contract).**
+
+### Changed
+- **New `src/dtmd/` layout** (src layout, `python -m dtmd` unified CLI):
+  - `dtmd/convert/` — conversion domain (`base` shared / `local` pipeline / `cloud` pipeline)
+  - `dtmd/quality/` — QA domain (`gates` checkers + `levels` L1/L2/L3 + `blocks`/`sample`/`rework`/`report` + `vision`)
+  - `dtmd/export.py`, `dtmd/tools/` (watchdog/check_done/clean_hook/glm_proxy), `dtmd/config.py`, `dtmd/utils.py`
+- **Deleted all root shims** (`auto_convert.py`/`mineru_day.py`/`qa_runner.py`/...) and old flat packages — root now has no `.py` files.
+- **Unified CLI**: `python -m dtmd convert|l1|l2|l3|rework|report|list` (7 commands) replaces the per-script entry points.
+- **Command migration**: `python auto_convert.py` → `python -m dtmd convert --mode local`; `python mineru_day.py --complex` → `python -m dtmd convert --mode cloud`; `python qa_runner.py l1` → `python -m dtmd l1`.
+- Deduplicated `safe()` (was 4 copies) into `dtmd.utils`; unified `is_done`/`already_done` into `dtmd.convert.base`.
+
+### Fixed
+- Hard-coded absolute path in `qa/vision.py` (`C:/Users/...`) → env-var `DTM_VISION_ANALYZER` (privacy red line).
+- `tests/` imports migrated to `dtmd.*` (15 tests pass).
+
+### Added
+- `--version` / `--mode local|cloud` on the unified CLI.
+- Friendly data-missing error message instead of bare traceback (plan.json is private data).
+
+## [0.3.0] - 2026-08-12
+
+QA system (`qa_runner`) for verifying converted output quality.
+
+### Added
+- **`qa_runner.py` + `qa/` package** (10 files): `list / l1 / l2 / l3 / rework / report` commands.
+- **L1 automated layer**: completeness + dual-layer page-count check (origin.pdf hard + content_list soft) + md_lint (high/low priority split) + image-reference integrity.
+- **L2 table recheck**: camelot on table-dense blocks only (stderr suppressed to avoid pypdf warning spam).
+- **L3 review layer**: text layer (LaTeX balance / content consistency) + vision layer (fitz render + Qwen-VL/GLM dual-vision A+B region+whole-page review) + verdict rules.
+- **Rework loop**: rework list + reconvert command generation.
+- **Tri-color report**: pass / rework / false-positive, JSON + Markdown output.
+- **Sampling cost control**: high-priority always checked, formula-dense representatives capped (`--max-formula`), vision-call estimate.
+
+### Fixed
+- argparse subparser default clobbering parent `--scope` value.
+- Dirty block data (missing file/start/end) crashing the whole scan.
+- `origin.pdf` UUID-prefix naming incompatibility (cloud `{uuid}_origin.pdf`).
+- content_list trailing-blank-page off-by-one false positive.
+- `doc.close()` accessed in f-string after close.
+- rework command missing `--complex`.
+- `report` silently producing a misleading all-pass report when the L1 queue was missing.
+- plan.json `pending_complex ⊂ pending_normal` overlap causing duplicate processing (deduped in `load_blocks`).
+
+### Data facts
+- Unique blocks = 275 (186 complex ⊂ 275 normal; `load_blocks(all)` dedupes).
+- L1 full scan: 275 done | 5 high-priority | 190 low-priority candidates.
+- L2: 73 table-dense → 13 flagged.
+- Full L3 vision review (15 targets): pass 1 / suspicious 14 (no fail after `$` heuristic fix).
+- Final tri-color: 81 pass / 0 rework / 194 review.
+
 ## [0.2.0] - 2026-08-11
 
 Modular restructure + text-cleaning-engine integration.

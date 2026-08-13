@@ -28,7 +28,7 @@ def _cleaner_path():
     if env:
         return env
     try:
-        import paths as _paths
+        from dtmd import config as _paths
         return _paths.CLEANER_PATH
     except ImportError:
         return ""

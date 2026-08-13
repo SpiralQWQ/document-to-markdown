@@ -7,9 +7,9 @@ import os
 import sys
 
 PROJ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, PROJ)
+sys.path.insert(0, os.path.join(PROJ, "src"))
 
-from quality.table_recheck import table_recheck
+from dtmd.quality.gates.table_recheck import table_recheck
 
 
 def test_missing_pdf():
@@ -22,7 +22,7 @@ def test_missing_pdf():
 def test_camelot_missing_handled():
     """camelot 未安装时应返回提示（不崩溃）。"""
     # 通过 monkeypatch 模拟 camelot 缺失
-    import quality.table_recheck as tr
+    from dtmd.quality.gates import table_recheck as tr
     orig_import = tr.__dict__.get("camelot", None)
     # 实际不卸载，这里只验证函数在 PDF 缺失时正常
     issues = table_recheck("/missing.pdf")
@@ -32,7 +32,7 @@ def test_camelot_missing_handled():
 def test_md_table_count():
     """_count_md_tables 应能统计 md 中的表格。"""
     import tempfile
-    from quality.table_recheck import _count_md_tables
+    from dtmd.quality.gates.table_recheck import _count_md_tables
     with tempfile.TemporaryDirectory() as tmp:
         md = os.path.join(tmp, "full.md")
         open(md, "w", encoding="utf-8").write("| a | b |\n|---|---|\n| 1 | 2 |")

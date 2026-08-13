@@ -1,5 +1,54 @@
 # document-to-markdown
 
+<p align="center">
+  <strong>PDF / Word / PPT → AI-ready Markdown</strong><br>
+  Batch document conversion with forced OCR, quality gates & multi-format export
+</p>
+
+<p align="center">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/stargazers">
+    <img src="https://img.shields.io/github/stars/SpiralQWQ/document-to-markdown?style=flat-square" alt="GitHub stars">
+  </a>
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/SpiralQWQ/document-to-markdown?style=flat-square" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg?style=flat-square" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/OCR-forced-orange.svg?style=flat-square" alt="Forced OCR">
+  <img src="https://img.shields.io/badge/quality-L1%2FL2%2FL3-green.svg?style=flat-square" alt="Quality gates">
+  <a href="https://github.com/SpiralQWQ/document-to-markdown/commits/main">
+    <img src="https://img.shields.io/github/last-commit/SpiralQWQ/document-to-markdown?style=flat-square" alt="Last commit">
+  </a>
+</p>
+
+<p align="center">
+  <a href="README_zh.md">中文</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="COMMERCIAL.md">Commercial license</a>
+</p>
+
+---
+
+## Table of Contents
+
+- [The problem it solves](#the-problem-it-solves)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Files](#files)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Quality checks (dtmd)](#quality-checks-dtmd)
+- [Configuration reference](#configuration-reference)
+- [Output layout](#output-layout)
+- [FAQ / Troubleshooting](#faq--troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Changelog](#changelog)
+- [License](#license)
+- [Support](#support)
+
+---
+
 Convert **PDF / Word (DOCX) / PowerPoint (PPTX)** documents into **AI-ready Markdown**
 for LLM consumption (RAG, agent pipelines, note generation). Built on **MinerU**
 as the parsing engine, with quality-gate patches and multi-format export.
@@ -19,6 +68,20 @@ as the parsing engine, with quality-gate patches and multi-format export.
 | Tables/formulas often parse wrong | ✅ Quality gates catch them (T1/T2) |
 | Corrupted/encrypted PDFs fail silently | ✅ Auto-repair before parsing (T4) |
 | Only get Markdown, need Word/PDF/PPT | ✅ Pandoc multi-format export (T5) |
+| Can't trust conversion quality at scale | ✅ **dtmd QA**: L1/L2/L3 tri-color review + rework loop |
+
+## Features
+
+| Area | What you get |
+|---|---|
+| 📄 **Multi-format input** | PDF, Word (DOCX), PowerPoint (PPTX) |
+| 🔍 **Forced OCR** | Every document parsed with OCR — scanned pages & formulas never lost |
+| 🧪 **Quality gates (T1/T2/T4/T5)** | md syntax lint · table recheck · PDF repair · multi-format export |
+| 🧠 **QA system (dtmd)** | L1 auto · L2 table recheck · L3 vision review · rework loop · tri-color report |
+| ☁️ **Cloud mode** | MinerU API batch upload → poll → download (5000 files/day) |
+| 🧼 **Text cleaning hook** | Integrates text-cleaning-engine (watermark/nav/garbled strip) |
+| 🔄 **Resume-safe** | Skips already-converted blocks; re-runs continue without re-upload |
+| 🖥️ **Cross-platform** | Windows / Linux / macOS (env-var path config)
 
 ## Architecture
 
@@ -35,17 +98,19 @@ Input documents (PDF / DOCX / PPTX)
 
 | File | Purpose |
 |---|---|
-| `auto_convert.py` | Main local converter: batch-converts per plan, quality-checked, resume-safe |
-| `mineru_day.py` | Cloud converter: batch upload → poll → download (MinerU cloud API) |
-| `mineru_local_batch.py` | Lightweight local batch converter |
-| `md_lint.py` | T1: Markdown syntax gate (mistune) |
-| `table_recheck.py` | T2: Table quality check (camelot, accuracy scoring) |
-| `pdf_repair.py` | T4: Corrupted/encrypted PDF repair (pikepdf) |
-| `export_md.py` | T5: Multi-format export (Pandoc) |
-| `formula_recheck.py` | Formula check hook (optional, needs Pix2Text) |
-| `glm_mineru_proxy.py` | GLM adapter proxy (for MinerU hybrid mode) |
-| `watchdog.py` | Watchdog: heartbeat file to detect stalls/deaths |
-| `check_done.py` | Check which folders are fully converted |
+| `src/dtmd/convert/local.py` | Main local converter: batch-converts per plan, quality-checked, resume-safe |
+| `src/dtmd/convert/cloud.py` | Cloud converter: batch upload → poll → download (MinerU cloud API) |
+| `src/dtmd/convert/local_batch.py` | Lightweight local batch converter |
+| `src/dtmd/cli.py` | **Unified CLI entry**: convert + L1/L2/L3 QA: L1/L2/L3 quality review + rework loop + report |
+| `src/dtmd/quality/` | **QA package**: `blocks` (list/status) · `l1` (completeness/pages/md_lint/images) · `l2` (table recheck) · `l3` (formula density/text/vision) · `vision` (fitz render + dual-vision) · `sample` (L3 sampling) · `rework` · `report` |
+| `src/dtmd/quality/gates/md_lint.py` | T1: Markdown syntax gate (mistune) |
+| `src/dtmd/quality/gates/table_recheck.py` | T2: Table quality check (camelot, accuracy scoring) |
+| `src/dtmd/quality/gates/pdf_repair.py` | T4: Corrupted/encrypted PDF repair (pikepdf) |
+| `src/dtmd/export.py` | T5: Multi-format export (Pandoc) |
+| `src/dtmd/quality/gates/formula_recheck.py` | Formula check hook (optional, needs Pix2Text) |
+| `src/dtmd/tools/glm_mineru_proxy.py` | GLM adapter proxy (for MinerU hybrid mode) |
+| `src/dtmd/tools/watchdog.py` | Watchdog: heartbeat file to detect stalls/deaths |
+| `src/dtmd/tools/check_done.py` | Check which folders are fully converted |
 
 ## Installation
 
@@ -73,6 +138,13 @@ cd document-to-markdown
 
 ```bash
 pip install "mineru[all]" pymupdf mistune "camelot-py[base]" pikepdf
+```
+
+Then install this package (editable) so `python -m dtmd` works from anywhere.
+Run in the repo root:
+
+```bash
+python -m pip install -e .
 ```
 
 > **Forced OCR** is the default philosophy: every document (PDF/Word/PPT) is
@@ -138,7 +210,7 @@ Scripts auto-create `_data/` / `_docs/` / `_logs/` / `_slices/` on first run.
 
 ### Step 5 — Cloud API token (optional, for cloud mode)
 
-If you use `mineru_day.py` (cloud mode), set your MinerU API token:
+If you use `dtmd convert --mode cloud` (cloud mode), set your MinerU API token:
 
 ```bash
 export MINERU_API_TOKEN="your_mineru_api_token"
@@ -148,7 +220,7 @@ Cloud mode uses the mineru.net API: up to **5000 files/day**; the first 1000
 pages/day run at highest priority, beyond that a slower queue (still parses,
 never lost).
 
-### Step 5 — GLM API key (optional, for hybrid mode)
+### Step 6 — GLM API key (optional, for hybrid mode)
 
 If you use the GLM adapter (`glm_mineru_proxy.py`) for hybrid MinerU mode:
 
@@ -161,16 +233,16 @@ export GLM_API_KEY="your_glm_api_key"
 ### Local batch conversion
 
 ```bash
-python auto_convert.py                 # convert per plan (checks every 10 blocks)
-python auto_convert.py --no-check      # convert without pause
-python auto_convert.py --max 5         # convert at most 5 blocks
+python -m dtmd convert --mode local                 # convert per plan (checks every 10 blocks)
+python -m dtmd convert --mode local --no-check      # convert without pause
+python -m dtmd convert --mode local --max 5         # convert at most 5 blocks
 ```
 
 ### Cloud conversion (MinerU API)
 
 ```bash
-python mineru_day.py --complex --dry-run   # preview what would be uploaded
-python mineru_day.py --complex             # upload & poll complex documents
+python -m dtmd convert --mode cloud --complex --dry-run   # preview what would be uploaded
+python -m dtmd convert --mode cloud --complex             # upload & poll complex documents
 ```
 
 ### Integrated text cleaning (optional, via text-cleaning-engine)
@@ -186,8 +258,8 @@ git clone https://github.com/SpiralQWQ/text-cleaning-engine.git /path/to/text-cl
 export DTM_CLEANER_PATH="/path/to/text-cleaning-engine"
 
 # 2. Clean a converted document via the hook (calls text-cleaning-engine's clean_md interface)
-python tools/clean_hook.py path/to/full.md                # → full_clean.md
-python tools/clean_hook.py path/to/full.md --anonymize    # → + PII scrub
+python -m dtmd.tools.clean_hook path/to/full.md                # → full_clean.md
+python -m dtmd.tools.clean_hook path/to/full.md --anonymize    # → + PII scrub
 ```
 
 Each `full.md` produces a cleaned `full_clean.md` in the same folder.
@@ -199,18 +271,94 @@ The hook calls `text-cleaning-engine`'s standard entry point internally:
 ### Multi-format export
 
 ```bash
-python export_md.py path/to/full.md --to docx   # → full.docx
-python export_md.py path/to/full.md --to html   # → full.html
-python export_md.py path/to/full.md --to pptx   # → full.pptx
+python -m dtmd.export path/to/full.md --to docx   # → full.docx
+python -m dtmd.export path/to/full.md --to html   # → full.html
+python -m dtmd.export path/to/full.md --to pptx   # → full.pptx
 ```
 
 ### Quality checks (run standalone)
 
 ```bash
-python md_lint.py path/to/full.md          # markdown syntax gate
-python table_recheck.py some.pdf           # table quality check
-python pdf_repair.py broken.pdf out.pdf    # repair corrupted PDF
+python -m dtmd.quality.gates.md_lint path/to/full.md          # markdown syntax gate
+python -m dtmd.quality.gates.table_recheck some.pdf           # table quality check
+python -m dtmd.quality.gates.pdf_repair broken.pdf out.pdf    # repair corrupted PDF
 ```
+
+## Quality checks (dtmd)
+
+The `dtmd` CLI's **QA commands** form a three-layer quality review system for converted output.
+Run it after conversion to know exactly which documents are trustworthy.
+
+```
+┌─ L1 · automated (free) ─────────────────────────────┐
+│  completeness · page count · md_lint · image refs   │
+│  → flags become "review candidates" (not failures)  │
+├─ L2 · targeted (free) ──────────────────────────────┤
+│  camelot table recheck on table-dense blocks        │
+├─ L3 · vision review (costs tokens) ─────────────────┤
+│  text layer (LaTeX balance) + vision layer          │
+│  (fitz render + Qwen-VL/GLM dual-vision, A+B)      │
+└─────────────────────────────────────────────────────┘
+   → tri-color report: 放心 pass / 返工 rework / 误报 review
+```
+
+### Commands
+
+```bash
+python -m dtmd convert --mode local|cloud   # convert (local/cloud pipeline)
+python -m dtmd list [--scope all|complex|normal]   # list blocks & status
+python -m dtmd l1 [--scope all|complex|normal]   # L1 auto check → queue
+python -m dtmd l2                                # L2 camelot table recheck
+python -m dtmd l3                                # L3 plan + cost estimate (no vision)
+python -m dtmd l3 --run                          # L3 execute vision review (costs tokens)
+python -m dtmd rework --cmds                     # rework list + reconvert commands
+python -m dtmd report                            # tri-color report (JSON + MD)
+```
+
+Typical flow: `l1 → l2 → l3 --run → rework → report`.
+
+### Outputs
+
+| Artifact | Path (default) |
+|---|---|
+| L1 review queue | `_data/qa/l1_queue.json` |
+| L2 results | `_data/qa/l2_results.json` |
+| L3 results | `_data/qa/l3_results.json` |
+| Tri-color report | `_data/qa/qa_report.json` + `qa_report.md` |
+| Rework list | `_data/qa/rework.json` |
+
+> L3 vision review is **opt-in** (`--run`) because it calls Qwen-VL / GLM vision
+> APIs (pay-per-use). The default `l3` shows a plan + cost estimate first.
+> `--max-formula N` caps formula-dense samples to control cost.
+
+## Configuration reference
+
+All scripts read configuration from environment variables (no hard-coded paths).
+Set them in your shell profile or a `.env` (see `.env.example`).
+
+### Paths
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `DTM_ROOT` | Root data directory (your documents) | repo parent dir |
+| `DTM_TOOLS` | Tools directory (this repo) | repo dir |
+| `DTM_MINERU_ENV` | MinerU virtual env path | `mineru` on PATH |
+| `DTM_PANDOC` | Pandoc executable path | `pandoc` on PATH |
+| `DTM_PIX2TEXT_ENV` | Pix2Text venv (optional, formula check) | empty (disabled) |
+| `DTM_CLEANER_PATH` | text-cleaning-engine repo path | empty (hook skips) |
+| `DTM_BRIDGE_DIR` | mineru-glm-bridge dir (GLM proxy) | empty |
+
+### API keys
+
+| Variable | Purpose |
+|---|---|
+| `MINERU_API_TOKEN` | MinerU cloud API (`dtmd convert --mode cloud`) |
+| `GLM_API_KEY` | GLM-4.6V vision (L3 review, `vision_analyzer`) / hybrid proxy |
+| `QWEN_API_KEY` | Qwen-VL vision (L3 review, `vision_analyzer` parallel) |
+| `GEMINI_API_KEY` | Gemini vision (optional L3 backend) |
+
+> L3 vision review uses **Qwen-VL + GLM-4.6V in parallel** by default
+> (`--backend parallel`); set `QWEN_API_KEY` and `GLM_API_KEY`.
 
 ## Output layout
 
@@ -220,6 +368,55 @@ python pdf_repair.py broken.pdf out.pdf    # repair corrupted PDF
   ├── images/           # extracted images
   └── *.json            # intermediate parsing results
 ```
+
+## FAQ / Troubleshooting
+
+### Q: A scanned PDF came out empty / missing text
+Make sure OCR is on. `dtmd convert --mode local` and `dtmd convert --mode cloud` force OCR
+by default. For a specific block, re-run with `--ocr` (see `python -m dtmd convert --help`).
+
+### Q: `dtmd l1` flags lots of "table-like text not parsed"
+That's the **md_lint `|` heuristic** — it treats any line containing `|` as a
+potential table. Math (`|V|`) and code are common false positives, so these are
+**low-priority candidates**, not failures. Confirm real issues with `l2`
+(camelot) or `l3` (vision).
+
+### Q: `dtmd l3` says "~315 vision calls" — is that normal?
+Yes — that's the **cost estimate** for the selected targets. `l3` without `--run`
+only prints the plan. Tune cost with `--max-formula N`, `--pages N`, or `--limit N`.
+
+### Q: `camelot` fails to read my PDF
+camelot needs **Ghostscript**. Install it and ensure it's on `PATH`. Some PDFs
+need `--flavor lattice` instead of `stream`; the tool tries both automatically.
+
+### Q: `_data/plan.json` not found
+The plan is **your private data** (which files/pages to convert) and is not
+shipped with the repo. Create one — see the minimal example in
+[Installation → Step 4](#step-4--prepare-data-dir-_dataplanjson).
+
+### Q: Why does `list --scope all` show 275 blocks, not "461"?
+`pending_complex` is a **subset** of `pending_normal` (complex documents also
+appear in the normal list). `dtmd` deduplicates by `(file, start, end)`,
+so "all" = the 275 unique blocks.
+
+### Q: Can I clean watermarks / navigation noise from the output?
+Yes — use the optional [text-cleaning-engine](#integrated-text-cleaning-optional-via-text-cleaning-engine) hook
+(`tools/clean_hook.py path/to/full.md` → `full_clean.md`).
+
+## Roadmap
+
+- [ ] **Packaging**: `pyproject.toml` + PyPI publish
+- [ ] **CI**: GitHub Actions — run `tests/` on every push
+- [ ] **Docker image**: one-command local pipeline
+- [ ] **Table verification**: TEDS scoring (stronger than camelot accuracy)
+- [ ] **Batch reporting**: aggregated QA report across many books
+- [ ] **Web UI**: upload → convert → review dashboard
+
+## Contributing
+
+Contributions are welcome! Bug reports, feature ideas, and PRs are all
+appreciated. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first, and note
+that all contributions must follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Changelog
 

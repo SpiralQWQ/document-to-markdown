@@ -4,10 +4,11 @@
 MinerU 每日转换执行脚本（PDF+PPT+DOC → 喂 AI 的 md）
 
 用法:
-  python mineru_day.py 1                # 转换 Day 1
-  python mineru_day.py 1 --dry-run      # 只切片+预览，不上传
-  python mineru_day.py 1 --limit 2      # 只处理前 2 块（试跑）
-  python mineru_day.py 1 --ocr          # 扫描件强制 OCR（默认关闭）
+  python -m dtmd convert --mode cloud 1                # 转换 Day 1
+  python -m dtmd convert --mode cloud 1 --dry-run      # 只切片+预览，不上传
+  python -m dtmd convert --mode cloud 1 --limit 2      # 只处理前 2 块（试跑）
+  python -m dtmd convert --mode cloud 1 --ocr          # 扫描件强制 OCR
+  python -m dtmd convert --mode cloud 1 --force        # 强制重转：绕过"已转跳过"，覆盖旧输出
 
 流程: 本地切片 → 批量上传 → 轮询 → 下载 zip → 解压全量 → 删 zip
 输出: 每原文件解压到 {原文件目录}/{原文件名}_mineru/ 独立子文件夹
@@ -15,30 +16,31 @@ MinerU 每日转换执行脚本（PDF+PPT+DOC → 喂 AI 的 md）
       full.md + images/ + json 全保留
 """
 import os, sys, json, time, zipfile, re
+import shutil
 import requests
-import fitz
 
 # Windows GBK 控制台兼容：强制 UTF-8 输出，防止 emoji/中文打印崩溃
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 API = "https://mineru.net/api/v4"
-# 路径统一走 paths.py（仓库根为基准，环境变量可覆盖）
-import paths as _paths
+# 路径统一走 dtmd.config（仓库根为基准，环境变量可覆盖）
+from dtmd import config as _paths
+from dtmd.utils import safe
+from dtmd.convert.base import is_done, make_slice, compute_out_dir
+
+already_done = is_done  # 统一完成判断（base.is_done）
+
 DATA_DIR = _paths.DATA_DIR    # plan/进度 等数据
 DOCS_DIR = _paths.DOCS_DIR    # 计划文档 等文档
 LOGS_DIR = _paths.LOGS_DIR    # 运行日志
 PLAN = _paths.PLAN
 SLICE = _paths.SLICE_DIR
 MAX_WAIT = 7200  # 轮询最长 2 小时
+FORCE = False  # 强制重转：--force 时绕过"已转跳过"并覆盖旧输出（模块级，供 save_zip 读）
 
 
 def err(msg):
     print(f"[错误] {msg}", file=sys.stderr)
-
-
-def safe(name):
-    """Windows 非法字符替换（文件名用）"""
-    return re.sub(r'[<>:"/\\|?*]', "_", name)
 
 
 def headers():
@@ -79,32 +81,11 @@ def upload_file(path, url, retries=3):
             time.sleep(wait)
 
 
-def make_slice(block, idx):
-    """生成上传文件：PDF 切片成独立小 PDF；PPT/DOC 用原文件。返回 tmp 路径"""
-    if block["kind"] == "PDF":
-        fn = safe(os.path.splitext(os.path.basename(block["file"]))[0])
-        tmp = os.path.join(SLICE, f"d{idx:03d}_{fn}_p{block['start']}-{block['end']}.pdf")
-        if not os.path.exists(tmp):
-            src = fitz.open(block["file"])
-            out = fitz.open()
-            out.insert_pdf(src, from_page=block["start"] - 1, to_page=block["end"] - 1)
-            out.save(tmp)
-            out.close(); src.close()
-        return tmp
-    return block["file"]  # PPT / DOC / 单块整文件
-
-
-def already_done(out_dir):
-    """输出目录已有 full.md 或任意 json → 视为已完成"""
-    if not os.path.isdir(out_dir):
-        return False
-    return os.path.exists(os.path.join(out_dir, "full.md")) or any(
-        f.lower().endswith(".json") for f in os.listdir(out_dir))
-
-
-def main():
-    args = [a for a in sys.argv[1:]]
+def main(argv=None):
+    args = list(argv) if argv is not None else [a for a in sys.argv[1:]]
     dry = "--dry-run" in args
+    global FORCE
+    FORCE = "--force" in args
     ocr = "--ocr" in args
     complex_mode = "--complex" in args
     # 复杂文档（扫描件/图片密集/公式密集）默认开 OCR——它们正是 OCR 适用场景；
@@ -123,10 +104,20 @@ def main():
         budget = int(args[args.index("--budget") + 1])
     if "--only" in args:
         only_keyword = args[args.index("--only") + 1]
+    # Day 解析：只取"非 flag 的裸数字位置参数"，跳过带值 flag(--limit/--budget/--only)的值，
+    # 避免 `--limit 2` 的 2 被误当 Day 2（Round2 fixloop 抓到的连锁 bug）
+    _VALUE_FLAGS = {"--limit", "--budget", "--only", "--max"}
     day = None
-    for a in args:
-        if a.isdigit():
-            day = int(a); break
+    _i = 0
+    while _i < len(args):
+        _a = args[_i]
+        if _a in _VALUE_FLAGS:
+            _i += 2; continue
+        if _a.startswith("-"):
+            _i += 1; continue
+        if _a.isdigit():
+            day = int(_a); break
+        _i += 1
 
     plan = json.load(open(PLAN, encoding="utf-8"))
 
@@ -142,13 +133,16 @@ def main():
             print("[complex] 无标记的复杂块"); return 0
         if limit:
             blocks = blocks[:limit]
+        # 先建 file_counts（用完整 pending_complex 判断单块/多块，勿用预算过滤后的 blocks）
+        file_counts = {}
+        for blk in plan.get("pending_complex", []):
+            file_counts[blk["file"]] = file_counts.get(blk["file"], 0) + 1
         if budget:
             used, kept = 0, []
             for b in blocks:
-                # 排除已完成的块（不占今日预算）
-                _out = b.get("out_dir", "")
-                if os.path.isdir(_out) and (os.path.exists(os.path.join(_out, "full.md")) or
-                                            any(f.endswith(".json") for f in os.listdir(_out))):
+                # 排除已完成的块（不占今日预算）——用运行时计算的 out_dir，勿依赖 b["out_dir"]（常缺失）
+                _out = compute_out_dir(b, file_counts)
+                if (not FORCE) and is_done(_out):
                     continue
                 if used + b["pages"] > budget:
                     continue
@@ -157,22 +151,15 @@ def main():
             print(f"[预算] 今日限 {budget} 页，实际排 {used} 页 / {len(blocks)} 块")
         print(f"[复杂文档] {len(blocks)} 块 / {sum(b['pages'] for b in blocks)} 页"
               + ("（DRY-RUN 预览）" if dry else ""))
-        file_counts = {}
-        # ⚠️ 修复：用完整 pending_complex 统计块数（判断"是否多块文件"），
-        # 不能用预算过滤后的 blocks——否则单块被选中时误判为单块文件，
-        # out_dir 指向根目录而误跳过（爬虫 p381-570 曾被误跳过）。
-        for blk in plan.get("pending_complex", []):
-            file_counts[blk["file"]] = file_counts.get(blk["file"], 0) + 1
         os.makedirs(SLICE, exist_ok=True)
         tasks = []
         for i, b in enumerate(blocks):
-            orig_dir = os.path.dirname(b["file"])
-            base = safe(os.path.splitext(os.path.basename(b["file"]))[0])
-            out_root = os.path.join(orig_dir, base + "_mineru")
-            multi = file_counts.get(b["file"], 1) > 1
-            out_dir = os.path.join(out_root, f"p{b['start']}-{b['end']}") if multi else out_root
-            if already_done(out_dir):
+            out_dir = compute_out_dir(b, file_counts)
+            if not FORCE and is_done(out_dir):
                 print(f"  跳过(已完成): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
+                continue
+            if not os.path.exists(b["file"]):
+                print(f"  跳过(源文件不存在): {os.path.basename(b['file'])}")
                 continue
             tasks.append({"tmp": make_slice(b, i), "out": out_dir, "data_id": f"cx{i}"})
         if not tasks:
@@ -204,7 +191,7 @@ def main():
         print(f"[复杂文档] 全部完成 ✅"); return 0
 
     if not day:
-        err("用法: python mineru_day.py <DayN> [--dry-run] [--limit N] [--ocr] [--complex]"); sys.exit(1)
+        err("用法: python -m dtmd convert --mode cloud <DayN> [--dry-run] [--limit N] [--ocr] [--complex]"); sys.exit(1)
     days = plan.get("days_normal") or plan.get("days") or []
     if day < 1 or day > len(days):
         err(f"Day {day} 超出范围（1-{len(days)}）"); sys.exit(1)
@@ -240,8 +227,11 @@ def main():
         out_root = os.path.join(orig_dir, base + "_mineru")
         multi = file_counts.get(b["file"], 0) > 1
         out_dir = os.path.join(out_root, f"p{b['start']}-{b['end']}") if multi else out_root
-        if already_done(out_dir):
+        if not FORCE and already_done(out_dir):
             print(f"  跳过(已完成): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
+            continue
+        if not os.path.exists(b["file"]):
+            print(f"  跳过(源文件不存在): {os.path.basename(b['file'])}")
             continue
         tmp = make_slice(b, i)
         tasks.append({"tmp": tmp, "out": out_dir, "data_id": f"d{day}b{i}"})
@@ -313,13 +303,28 @@ def poll_and_save(batch_id, group, h):
 
 def save_zip(t, zip_url):
     """下载 zip → 解压到输出目录 → 删除 zip（图片/json 全保留）"""
+    if FORCE:
+        shutil.rmtree(t["out"], ignore_errors=True)
     os.makedirs(t["out"], exist_ok=True)
     tmp_zip = os.path.join(SLICE, f"tmp_{t['data_id']}.zip")
     r = http("GET", zip_url, timeout=600)
     with open(tmp_zip, "wb") as f:
         f.write(r.content)
     with zipfile.ZipFile(tmp_zip) as zf:
-        zf.extractall(t["out"])
+        # zip-slip 防护：过滤绝对路径 / ../ 越界 / 盘符相对(C:foo) 成员，防解压写穿出 out_dir
+        def _safe_member(m):
+            fn = m.filename
+            if fn.startswith(("/", "\\")):
+                return False
+            if os.path.isabs(fn):
+                return False
+            if os.path.splitdrive(fn)[0]:  # 盘符相对（Windows os.path.isabs 漏网的 C:evil）
+                return False
+            if ".." in os.path.normpath(fn).split(os.sep):
+                return False
+            return True
+        members = [m for m in zf.infolist() if _safe_member(m)]
+        zf.extractall(t["out"], members=members)
     os.remove(tmp_zip)
     print(f"  [保存] {os.path.basename(t['out'])} ← zip 已解压并删除（full.md+images+json 全保留）")
 

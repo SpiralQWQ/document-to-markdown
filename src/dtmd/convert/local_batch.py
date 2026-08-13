@@ -17,7 +17,7 @@ import os, sys, json, time, subprocess
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-import paths as _paths
+from dtmd import config as _paths
 ROOT = _paths.TOOLS
 TOOLS = _paths.TOOLS
 DATA_DIR = _paths.DATA_DIR
@@ -33,19 +33,10 @@ TIMEOUT_PER_PAGE = 15  # 每页最长处理秒数（防卡死）
 DEFAULT_BACKEND = "vlm-engine"  # 最高精度本地引擎
 
 
-def safe(name):
-    """文件名安全替换"""
-    import re
-    return re.sub(r'[<>:"/\\|?*]', "_", name)
+from dtmd.utils import safe
 
 
-def is_done(out_dir):
-    """该输出已存在 full.md 或 json → 跳过"""
-    if not os.path.isdir(out_dir):
-        return False
-    if os.path.exists(os.path.join(out_dir, "full.md")):
-        return True
-    return any(fn.lower().endswith(".json") for fn in os.listdir(out_dir))
+from dtmd.convert.base import is_done  # 统一完成判断（唯一来源，勿本地重复定义）
 
 
 def chunk_large_pdf(filepath):
@@ -81,8 +72,12 @@ def chunk_large_pdf(filepath):
     return temp_files or [filepath]
 
 
-def convert_single(pdf_path, out_dir, backend="vlm-engine"):
-    """调用 MinerU CLI 转换单个 PDF"""
+def convert_single(pdf_path, out_dir, pages, backend="vlm-engine"):
+    """调用 MinerU CLI 转换单个 PDF。
+
+    超时按实际页数算（pages * TIMEOUT_PER_PAGE，下限 300s），
+    修正旧版用 len(pdf_path.split())（路径无空格恒=1）导致大文档被 300s 误杀的问题。
+    """
     cmd = [
         MINERU_CLI,
         "-p", pdf_path,
@@ -94,7 +89,7 @@ def convert_single(pdf_path, out_dir, backend="vlm-engine"):
     ]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=max(int(len(pdf_path.split()) * TIMEOUT_PER_PAGE), 300))
+                              timeout=max(int(pages) * TIMEOUT_PER_PAGE, 300))
         if proc.returncode != 0:
             stderr = proc.stderr[-200:] if proc.stderr else "no output"
             print(f"[ERROR] 转换失败 {os.path.basename(pdf_path)}: {stderr}")
@@ -120,19 +115,21 @@ def main():
     if "--backend" in args:
         backend = args[args.index("--backend") + 1]
 
-    # 加载计划
+    # 加载计划（兼容 days_normal 与 days 两种 schema）
     plan = json.load(open(PLAN, encoding="utf-8"))
+    days = plan.get("days_normal") or plan.get("days") or []
     blocks = []
     if day:
-        blocks = plan["days"][day - 1]["blocks"]
+        blocks = days[day - 1]["blocks"]
     else:
         # 扫描所有天，收集待转块
-        for d in plan["days"]:
+        for d in days:
             for b in d["blocks"]:
                 blocks.append(b)
 
     # 生成任务清单（跳过已完成 + 源文件不存在）
     tasks = []
+    skipped = 0
     for i, b in enumerate(blocks):
         if not os.path.exists(b["file"]):
             print(f"  跳过(源文件删除): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
@@ -143,6 +140,7 @@ def main():
         multi = len([x for x in blocks if x["file"] == b["file"]]) > 1
         out_dir = os.path.join(out_root, f"p{b['start']}-{b['end']}") if multi else out_root
         if is_done(out_dir):
+            skipped += 1
             print(f"  跳过(已完成): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
             continue
         tasks.append({"block": b, "tmp_file": None, "out": out_dir})
@@ -175,8 +173,7 @@ def main():
     # 串行执行，每次最多 MAX_CONCURRENT 并发
     success_count = 0
     fail_count = 0
-    skipped = sum(1 for t in tasks if is_done(t["out"]))
-    pending = len(tasks) - skipped
+    pending = len(tasks)
 
     print(f"\n[执行] {pending} 个待转任务...\n")
     for idx, t in enumerate(tasks, 1):
@@ -184,7 +181,10 @@ def main():
         tmp_files = t["tmp_file"] if t["tmp_file"] else [bf["file"]]
 
         for j, tmp in enumerate(tmp_files):
-            result = convert_single(tmp, t["out"], backend)
+            # 多片大文件：每片输出到独立子目录，避免互相覆盖；单片用 t["out"]
+            slice_out = t["out"] if len(tmp_files) == 1 else os.path.join(t["out"], f"_s{j+1}")
+            os.makedirs(slice_out, exist_ok=True)
+            result = convert_single(tmp, slice_out, bf["pages"], backend)
             if result:
                 success_count += 1
             else:

@@ -21,7 +21,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 GLM_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 MODEL = os.environ.get("GLM_MODEL", "glm-4.6v-flashx")
-PORT = int(os.environ.get("PROXY_PORT", "8031"))
+from dtmd import config as _cfg
+
+PORT = _cfg.PROXY_PORT  # 单一事实源（dtmd.config.PROXY_PORT，读 DTM_PROXY_PORT）
 LOG_PATH = os.environ.get("GLM_PROXY_LOG", "")
 
 # 全局限流：限制同时访问 GLM 的请求数，避免 429

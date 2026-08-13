@@ -4,6 +4,63 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [Unreleased]
+
+### 新增
+- 社区文档：`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`pyproject.toml`。
+
+## [0.4.0] — 2026-08-13
+
+**目录结构重构为 `src/dtmd/`（按职责 SoC 目录契约）。**
+
+### 变更
+- **新 `src/dtmd/` 布局**（src 布局，统一 `python -m dtmd` CLI）：
+  - `dtmd/convert/` — 转换域（`base` 公共 / `local` 本地管线 / `cloud` 云端管线）
+  - `dtmd/quality/` — 质检域（`gates` 检查器 + `levels` L1/L2/L3 + `blocks`/`sample`/`rework`/`report` + `vision`）
+  - `dtmd/export.py`、`dtmd/tools/`（watchdog/check_done/clean_hook/glm_proxy）、`dtmd/config.py`、`dtmd/utils.py`
+- **删除全部根壳**（`auto_convert.py`/`mineru_day.py`/`qa_runner.py`/...）和旧平铺包——根目录不再有 `.py` 文件。
+- **统一 CLI**：`python -m dtmd convert|l1|l2|l3|rework|report|list`（7 命令）取代各脚本入口。
+- **命令迁移**：`python auto_convert.py` → `python -m dtmd convert --mode local`；`python mineru_day.py --complex` → `python -m dtmd convert --mode cloud`；`python qa_runner.py l1` → `python -m dtmd l1`。
+- 去重 `safe()`（原 4 份）到 `dtmd.utils`；统一 `is_done`/`already_done` 到 `dtmd.convert.base`。
+
+### 修复
+- `qa/vision.py` 硬编码绝对路径（`C:/Users/...`）→ 环境变量 `DTM_VISION_ANALYZER`（隐私红线）。
+- `tests/` import 迁移到 `dtmd.*`（15 测试全过）。
+
+### 新增
+- 统一 CLI 加 `--version` / `--mode local|cloud`。
+- 数据缺失（plan.json 私有数据）给友好提示，不再裸 traceback。
+
+## [0.3.0] — 2026-08-12
+
+质检系统（qa_runner）—— 转写产出的三层质检。
+
+### 新增
+- **`qa_runner.py` + `qa/` 包**（10 文件）：`list / l1 / l2 / l3 / rework / report` 6 命令
+- **L1 自动层**：完整性 + 双层页数核对（origin.pdf 硬检 + content_list 软检）+ md_lint（高/低优先级拆分）+ 图片引用完整性
+- **L2 表格复核**：camelot 只跑表格密集块（抑制 pypdf 警告刷屏）
+- **L3 复审层**：文本层（LaTeX 配平/内容一致性）+ 视觉层（fitz 渲染 + Qwen-VL/GLM 双视觉 A+B 区域+整页审）+ 判定规则
+- **返工闭环**：返工清单 + 重转命令生成
+- **三色报告**：放心/返工/误报，JSON + Markdown 双输出
+- **抽样成本控制**：高优先全查 + 公式密集代表上限（`--max-formula`）+ 视觉调用预估
+
+### 修复
+- argparse 子解析器默认值覆盖 `--scope`
+- 脏块数据（缺 file/start/end）整批崩溃
+- `origin.pdf` UUID 前缀命名不兼容
+- content_list 末尾空白页 off-by-one 误报
+- `doc.close()` 后访问 f-string bug
+- 重转命令漏 `--complex`
+- `report` 缺 L1 队列时产出误导性「全放心」报告（严重）
+- plan.json `pending_complex ⊂ pending_normal` 重叠导致重复处理（已去重）
+
+### 数据真相
+- 唯一块 = 275（186 复杂 ⊂ 275 普通；`load_blocks(all)` 已去重）
+- L1 全量：275 完成 | 高优先 5 | 低优先候选 190
+- L2：73 表格密集 → 13 标红
+- 全量 L3 视觉复审 15 目标：pass 1 / suspicious 14（`$` 误报纠正后无 fail）
+- 最终三色：放心 81 / 返工 0 / 候选 194
+
 ## [0.2.0] — 2026-08-11
 
 模块化重构 + 接入 text-cleaning-engine 联动清洗。

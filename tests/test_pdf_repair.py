@@ -6,9 +6,9 @@ import os
 import sys
 
 PROJ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, PROJ)
+sys.path.insert(0, os.path.join(PROJ, "src"))
 
-from quality.pdf_repair import repair_pdf
+from dtmd.quality.gates.pdf_repair import repair_pdf
 
 
 def test_missing_file():
