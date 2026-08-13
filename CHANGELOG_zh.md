@@ -9,6 +9,9 @@
 ### 新增
 - 社区文档：`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`pyproject.toml`。
 
+### 修复
+- `md_lint` 降级分支消息与 `l1.py` 低优先分类对齐（无 `mistune` 时表格样式文本正确归为候选）。
+
 ## [0.4.0] — 2026-08-13
 
 **目录结构重构为 `src/dtmd/`（按职责 SoC 目录契约）。**

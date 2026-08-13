@@ -61,9 +61,11 @@ def md_lint(md_path, min_size=MIN_MD_SIZE):
     # 无 mistune 时降级：仅做行级启发式检查
     if mistune is None:
         # 表格检查：统计含 | 的行，若分隔行(|---|)出现但列数不一致 → 报
+        # 消息格式与正式 mistune 分支统一（"发现…表格样式…"），保证 l1.py 的
+        # 表格样式问题统一降级为低优先候选（数学 |V| 会误报为表格）
         table_lines = [l for l in text.splitlines() if _looks_like_table(l)]
         if table_lines:
-            issues.append(f"含表格样式的行 {len(table_lines)} 行，建议人工核对（无 mistune 仅启发式）")
+            issues.append(f"发现 {len(table_lines)} 行表格样式文本，但无法解析为表格（无 mistune 仅启发式）")
         fence_count = sum(1 for l in text.splitlines() if _looks_like_fence(l))
         if fence_count % 2 != 0:
             issues.append(f"代码块围栏数量为奇数({fence_count})，疑似未闭合")

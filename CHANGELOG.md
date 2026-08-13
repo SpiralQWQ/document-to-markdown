@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Community docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `pyproject.toml`.
 
+### Fixed
+- `md_lint` degraded-branch message aligned with `l1.py` low-priority classification (table-style text correctly filed as candidate when `mistune` is unavailable).
+
 ## [0.4.0] - 2026-08-13
 
 **Structural restructure to `src/dtmd/` (SoC directory contract).**
