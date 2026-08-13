@@ -107,7 +107,6 @@ Input documents (PDF / DOCX / PPTX)
 | `src/dtmd/quality/gates/table_recheck.py` | T2: Table quality check (camelot, accuracy scoring) |
 | `src/dtmd/quality/gates/pdf_repair.py` | T4: Corrupted/encrypted PDF repair (pikepdf) |
 | `src/dtmd/export.py` | T5: Multi-format export (Pandoc) |
-| `src/dtmd/quality/gates/formula_recheck.py` | Formula check hook (optional, needs Pix2Text) |
 | `src/dtmd/tools/glm_mineru_proxy.py` | GLM adapter proxy (for MinerU hybrid mode) |
 | `src/dtmd/tools/watchdog.py` | Watchdog: heartbeat file to detect stalls/deaths |
 | `src/dtmd/tools/check_done.py` | Check which folders are fully converted |
@@ -346,7 +345,9 @@ Set them in your shell profile or a `.env` (see `.env.example`).
 | `DTM_PANDOC` | Pandoc executable path | `pandoc` on PATH |
 | `DTM_PIX2TEXT_ENV` | Pix2Text venv (optional, formula check) | empty (disabled) |
 | `DTM_CLEANER_PATH` | text-cleaning-engine repo path | empty (hook skips) |
-| `DTM_BRIDGE_DIR` | mineru-glm-bridge dir (GLM proxy) | empty |
+| `DTM_BRIDGE_DIR` |
+| `DTM_VISION_ANALYZER` | vision_analyzer.py path (L3 vision review) |
+ mineru-glm-bridge dir (GLM proxy) | empty |
 
 ### API keys
 

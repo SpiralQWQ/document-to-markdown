@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-auto_convert 看门狗 — 检测转换是否卡死/推进，写心跳文件供 Monitor 监控
+dtmd 转换看门狗 — 检测转换是否卡死/推进，写心跳文件供 Monitor 监控
 
 监控指标:
   1. GLM 代理连接数（>0 = 在调 GLM）
   2. 输出目录 full.md 数量（产出增长）
   3. auto_progress converted 计数
-  4. auto_convert 进程存活
+  4. dtmd convert 进程存活
   5. 心跳时间戳（检测卡死：无心跳超时 = 卡住）
 
 用法: python watchdog.py
@@ -59,7 +59,7 @@ def check_process():
     try:
         r = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command",
-             "Get-CimInstance Win32_Process | Where-Object {($_.CommandLine -match 'dtmd convert' -or $_.CommandLine -match 'auto_convert') -and $_.Name -match 'python'} | Select-Object -First 1"],
+             "Get-CimInstance Win32_Process | Where-Object {($_.CommandLine -match 'dtmd convert') -and $_.Name -match 'python'} | Select-Object -First 1"],
             capture_output=True, text=True, timeout=15)
         return "ProcessId" in r.stdout
     except Exception:

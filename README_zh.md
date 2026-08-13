@@ -107,7 +107,6 @@
 | `src/dtmd/quality/gates/table_recheck.py` | T2：表格质检（camelot，质量评分）|
 | `src/dtmd/quality/gates/pdf_repair.py` | T4：损坏/加密 PDF 修复（pikepdf）|
 | `src/dtmd/export.py` | T5：多格式导出（Pandoc）|
-| `src/dtmd/quality/gates/formula_recheck.py` | 公式复核钩子（可选，需要 Pix2Text）|
 | `src/dtmd/tools/glm_mineru_proxy.py` | GLM 适配代理（MinerU hybrid 模式用）|
 | `src/dtmd/tools/watchdog.py` | 看门狗：心跳文件检测卡死/进程死亡 |
 | `src/dtmd/tools/check_done.py` | 检查哪些文件夹已全部转完 |
@@ -337,7 +336,9 @@ python -m dtmd report                            # 三色报告（JSON + MD）
 | `DTM_PANDOC` | Pandoc 可执行路径 | PATH 上的 `pandoc` |
 | `DTM_PIX2TEXT_ENV` | Pix2Text venv（可选，公式复核）| 空（禁用）|
 | `DTM_CLEANER_PATH` | text-cleaning-engine 仓库路径 | 空（钩子跳过）|
-| `DTM_BRIDGE_DIR` | mineru-glm-bridge 目录（GLM 代理）| 空 |
+| `DTM_BRIDGE_DIR` |
+| `DTM_VISION_ANALYZER` | vision_analyzer.py 路径（L3 视觉复审必需）|
+ mineru-glm-bridge 目录（GLM 代理）| 空 |
 
 ### API Key
 

@@ -54,12 +54,12 @@ QA system (`qa_runner`) for verifying converted output quality.
 - `report` silently producing a misleading all-pass report when the L1 queue was missing.
 - plan.json `pending_complex ⊂ pending_normal` overlap causing duplicate processing (deduped in `load_blocks`).
 
-### Data facts
-- Unique blocks = 275 (186 complex ⊂ 275 normal; `load_blocks(all)` dedupes).
-- L1 full scan: 275 done | 5 high-priority | 190 low-priority candidates.
-- L2: 73 table-dense → 13 flagged.
-- Full L3 vision review (15 targets): pass 1 / suspicious 14 (no fail after `$` heuristic fix).
-- Final tri-color: 81 pass / 0 rework / 194 review.
+### Verified
+- `load_blocks(all)` dedupes overlapping complex/normal entries.
+- L1 full scan: all blocks done, no missing output.
+- L2 table recheck: table-dense blocks flagged for review.
+- Full L3 vision review: pass/suspicious verdicts, no fail after `$` heuristic fix.
+- Final tri-color report generated (pass / rework / review).
 
 ## [0.2.0] - 2026-08-11
 

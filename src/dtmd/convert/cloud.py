@@ -300,30 +300,45 @@ def poll_and_save(batch_id, group, h):
 
 
 def save_zip(t, zip_url):
-    """下载 zip → 解压到输出目录 → 删除 zip（图片/json 全保留）"""
+    """下载 zip → 解压到输出目录 → 删除 zip（图片/json 全保留）。
+
+    单文件失败不中断整批：HTTP 非 200 / zip 损坏 → 记录错误并返回。
+    """
     if FORCE:
         shutil.rmtree(t["out"], ignore_errors=True)
     os.makedirs(t["out"], exist_ok=True)
     tmp_zip = os.path.join(SLICE, f"tmp_{t['data_id']}.zip")
     r = http("GET", zip_url, timeout=600)
-    with open(tmp_zip, "wb") as f:
-        f.write(r.content)
-    with zipfile.ZipFile(tmp_zip) as zf:
-        # zip-slip 防护：过滤绝对路径 / ../ 越界 / 盘符相对(C:foo) 成员，防解压写穿出 out_dir
-        def _safe_member(m):
-            fn = m.filename
-            if fn.startswith(("/", "\\")):
-                return False
-            if os.path.isabs(fn):
-                return False
-            if os.path.splitdrive(fn)[0]:  # 盘符相对（Windows os.path.isabs 漏网的 C:evil）
-                return False
-            if ".." in os.path.normpath(fn).split(os.sep):
-                return False
-            return True
-        members = [m for m in zf.infolist() if _safe_member(m)]
-        zf.extractall(t["out"], members=members)
-    os.remove(tmp_zip)
+    if r.status_code != 200:
+        print(f"  [错误] zip 下载失败 HTTP {r.status_code}: {os.path.basename(t['out'])}")
+        return
+    try:
+        with open(tmp_zip, "wb") as f:
+            f.write(r.content)
+        with zipfile.ZipFile(tmp_zip) as zf:
+            # zip-slip 防护：过滤绝对路径 / ../ 越界 / 盘符相对(C:foo) 成员
+            def _safe_member(m):
+                fn = m.filename
+                if fn.startswith(("/", "\\")):
+                    return False
+                if os.path.isabs(fn):
+                    return False
+                if os.path.splitdrive(fn)[0]:  # 盘符相对（Windows os.path.isabs 漏网的 C:evil）
+                    return False
+                if ".." in os.path.normpath(fn).split(os.sep):
+                    return False
+                return True
+            members = [m for m in zf.infolist() if _safe_member(m)]
+            zf.extractall(t["out"], members=members)
+    except (zipfile.BadZipFile, Exception) as e:
+        print(f"  [错误] zip 解压失败: {os.path.basename(t['out'])} → {e}")
+        return
+    finally:
+        try:
+            if os.path.exists(tmp_zip):
+                os.remove(tmp_zip)
+        except OSError:
+            pass
     print(f"  [保存] {os.path.basename(t['out'])} ← zip 已解压并删除（full.md+images+json 全保留）")
 
 

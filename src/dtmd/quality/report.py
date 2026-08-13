@@ -102,7 +102,7 @@ def write_report(report, json_path, md_path):
 
     # 人类可读 md
     lines = [
-        "# M.AIStudy 转写质检报告",
+        "# document-to-markdown 转写质检报告",
         "",
         f"> 生成: {payload['generated']}",
         "",

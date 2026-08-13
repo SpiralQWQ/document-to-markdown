@@ -110,6 +110,7 @@ def convert_block(block, out_dir, backend=BACKEND, ocr=True):
     """
     # 坏 PDF 急救（v0.1.0 补丁 T4）：PDF 打不开（加密/损坏）先修复
     tmp = block["file"]
+    src_file = block["file"]  # 切片源：修复后应指向修复文件，避免修复产物被原始坏文件覆盖
     if block.get("kind") == "PDF" and os.path.exists(block["file"]):
         try:
             from dtmd.quality.gates.pdf_repair import repair_pdf
@@ -125,6 +126,7 @@ def convert_block(block, out_dir, backend=BACKEND, ocr=True):
                 _ok, _rp, _msg = repair_pdf(block["file"], _repair_src)
                 if _ok:
                     tmp = _rp
+                    src_file = _rp
                     print(f"  [急救] PDF 加密已修复: {_msg}")
                 else:
                     print(f"  [跳过] {_msg}"); return False, "pdf-password-need-human"
@@ -135,6 +137,7 @@ def convert_block(block, out_dir, backend=BACKEND, ocr=True):
                 _ok, _rp, _msg = repair_pdf(block["file"], _repair_src)
                 if _ok:
                     tmp = _rp
+                    src_file = _rp
                     print(f"  [急救] PDF 损坏已修复: {_msg}")
                 else:
                     print(f"  [跳过] {_msg}"); return False, "pdf-unrepairable"
@@ -153,7 +156,7 @@ def convert_block(block, out_dir, backend=BACKEND, ocr=True):
             os.makedirs(SLICE_DIR, exist_ok=True)
             tmp = os.path.join(SLICE_DIR, f"auto_{base}_p{block['start']}-{block['end']}.pdf")
             if not os.path.exists(tmp):
-                src = fitz.open(block["file"])
+                src = fitz.open(src_file)
                 out = fitz.open()
                 out.insert_pdf(src, from_page=block["start"]-1, to_page=block["end"]-1)
                 out.save(tmp); out.close(); src.close()
@@ -383,7 +386,7 @@ def main(argv=None):
     args = list(argv) if argv is not None else sys.argv[1:]
     no_check = "--no-check" in args
     do_clean = "--clean" in args
-    force_ocr = "--ocr" in args  # 强制 OCR（本地模式，README 声称支持）
+    dry_run = "--dry-run" in args  # 预览模式（与云端一致，禁止静默忽略）
     max_blocks = None
     # --max 与 --limit 同义（统一 CLI 可能透传 --limit 到 local）
     if "--max" in args:
@@ -406,9 +409,21 @@ def main(argv=None):
     total_converted = 0
     # 复杂文档清单（后续云端转换用）
     complex_log = os.path.join(DOCS_DIR, "complex_list.md")
+    if dry_run:
+        # 预览模式：列出待转块后返回，不执行（与云端 --dry-run 语义一致）
+        n_preview = 0
+        for day_idx, day in enumerate(days, 1):
+            for b in day["blocks"]:
+                n_preview += 1
+                print(f"  [DRY-RUN] {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
+        print(f"[DRY-RUN] 共 {n_preview} 块（未执行）")
+        return 0
     for day_idx, day in enumerate(days, 1):
         blocks = day["blocks"]
         for b_idx, block in enumerate(blocks, 1):
+            if not os.path.exists(block["file"]):
+                print(f"  [跳过·源文件不存在] {os.path.basename(block['file'])}")
+                continue
             # 先算输出目录，做已完成检查 —— 已本地转成功的块绝不再送云端（防重复浪费额度）
             orig_dir = os.path.dirname(block["file"])
             base = safe(os.path.splitext(os.path.basename(block["file"]))[0])

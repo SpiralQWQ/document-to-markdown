@@ -264,7 +264,7 @@ def main(argv=None):
     # 数值参数防呆：负数/非法范围直接报错
     for name, val in (("--limit", args.limit), ("--table-min", args.table_min),
                       ("--pages", args.pages), ("--eq-min", args.eq_min),
-                      ("--max-formula", args.max_formula), ("--max", args.max)):
+                      ("--max-formula", args.max_formula), ("--max", args.max), ("--max-high", args.max_high)):
         if val is not None and val < 0:
             ap.error(f"{name} 不能为负（收到 {val}）")
     if not args.cmd or args.cmd not in COMMANDS:

@@ -69,6 +69,8 @@ def pick_pages(out_dir, n=3):
     plist = sorted(pages)
     if not plist:
         return []
+    if n <= 1:
+        return plist[:1]  # 抽 1 页不返回首尾两页
     if len(plist) <= n:
         return plist
     # 均匀取 n 个：首、中、尾

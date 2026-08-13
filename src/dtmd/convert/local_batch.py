@@ -82,7 +82,7 @@ def convert_single(pdf_path, out_dir, pages, backend="vlm-engine"):
         MINERU_CLI,
         "-p", pdf_path,
         "-o", out_dir,
-        "-m", "auto",
+        "-m", "ocr",
         "-b", backend,
         "-f", "true",
         "-t", "true",

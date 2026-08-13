@@ -34,7 +34,7 @@ Before diving in, skim the [README](README.md) to understand the architecture:
 
 - **conversion**: `src/dtmd/convert/local.py` (local) / `src/dtmd/convert/cloud.py` (cloud)
 - **quality gates**: `src/dtmd/quality/gates/md_lint.py`, `table_recheck.py`, `pdf_repair.py`
-- **QA system**: `qa/` package (`l1/l2/l3/rework/report`)
+- **QA system**: `src/dtmd/quality/` package (`l1/l2/l3/rework/report`)
 - **config**: all paths come from `src/dtmd/config.py` (env-var driven, no hard-coded absolute paths)
 
 ## How can I contribute?
