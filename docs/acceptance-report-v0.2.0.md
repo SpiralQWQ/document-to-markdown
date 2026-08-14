@@ -1,6 +1,6 @@
 # 开源发布验收报告 · document-to-markdown v0.2.0
 
-> **版本**: v1.0 · **日期**: 2026-08-11 · **状态**: 通过（可发布）
+> **版本**: v0.2.0 · **日期**: 2026-08-11 · **状态**: 通过（可发布）
 > **范围**: document-to-markdown 模块化重构 + text-cleaning-engine 联动 → 发布前全量穷举验收
 > **对照**: text-cleaning-engine 开源仓库规范（README/CHANGELOG 中英双语、AGPL-3.0 双许可、打赏码、署名 Spiral）
 

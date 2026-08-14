@@ -106,7 +106,7 @@
 
 - **84 个穷举用例** 覆盖 8 个任务（paths、md_lint、table_recheck、pdf_repair、
   export_md、clean_hook、CLI 入口、导入/隐私），每个任务过 4 轮审核。
-  完整报告：`docs/开源发布验收报告_v1.0.md`。
+  完整报告：`docs/acceptance-report-v0.2.0.md`。
 
 ## [0.1.0] — 2026-08-11
 

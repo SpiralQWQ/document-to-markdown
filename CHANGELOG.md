@@ -106,7 +106,7 @@ Modular restructure + text-cleaning-engine integration.
 
 - **84 exhaustive test cases** across 8 tasks (paths, md_lint, table_recheck,
   pdf_repair, export_md, clean_hook, CLI entry, imports/privacy), each passing
-  4 review rounds. Full report: `docs/开源发布验收报告_v1.0.md`.
+  4 review rounds. Full report: `docs/acceptance-report-v0.2.0.md`.
 
 ## [0.1.0] - 2026-08-11
 
