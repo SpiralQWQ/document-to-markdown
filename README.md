@@ -43,7 +43,7 @@
 - [Quality checks (dtmd)](#quality-checks-dtmd)
 - [Configuration reference](#configuration-reference)
 - [Output layout](#output-layout)
-- [FAQ / Troubleshooting](#faq--troubleshooting)
+- [FAQ / Troubleshooting](#faq-troubleshooting)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [Changelog](#changelog)
