@@ -83,6 +83,7 @@ as the parsing engine, with quality-gate patches and multi-format export.
 | 🧠 **QA system (dtmd)** | L1 auto · L2 table recheck · L3 vision review · rework loop · tri-color report |
 | ☁️ **Cloud mode** | MinerU API batch upload → poll → download (5000 files/day) |
 | 🧼 **Text cleaning hook** | Integrates text-cleaning-engine (watermark/nav/garbled strip) |
+| 🧽 **Block-level cleaning** | Auto-strips page headers/footers/page numbers/watermarks from converted `full.md` (MinerU type + position-aware) |
 | 🔄 **Resume-safe** | Skips already-converted blocks; re-runs continue without re-upload |
 | 🖥️ **Cross-platform** | Windows / Linux / macOS (env-var path config)
 
@@ -246,6 +247,31 @@ python -m dtmd convert --mode local --max 5         # convert at most 5 blocks
 python -m dtmd convert --mode cloud --complex --dry-run   # preview what would be uploaded
 python -m dtmd convert --mode cloud --complex             # upload & poll complex documents
 ```
+
+### Block-level cleaning (built-in, automatic)
+
+Conversion now cleans output **automatically**: page headers/footers, page numbers and
+repeated watermark lines (book titles, chapter headers, ad watermarks) are stripped from
+`full.md` right after conversion (both local and cloud pipelines). Detection uses MinerU's
+`content_list.json` block types (`header`/`footer`/`page_number`/`page_footnote`) plus a
+position-aware fallback for watermarks MinerU did not tag — with cross-page dedup and
+short-key filtering to avoid deleting body text.
+
+```bash
+# Clean one converted directory (in place, overwrites full.md)
+python -m dtmd clean path/to/xxx_mineru
+
+# Clean all converted dirs under a root (single-block + multi-block p{start}-{end} subdirs)
+python -m dtmd clean /path/to/kb --recursive
+
+# Preview only (report how many lines would be removed, without writing)
+python -m dtmd clean /path/to/kb --recursive --dry-run
+```
+
+Block-level cleaning is built-in. For **text-feature watermarks** (QQ-group / WeChat /
+email signatures that block-level position detection can miss), `dtmd clean` additionally
+calls [**text-cleaning-engine**](https://github.com/SpiralQWQ/text-cleaning-engine)'s
+precise `--watermark-only` mode — set `DTM_CLEANER_PATH` to enable it (skipped otherwise).
 
 ### Integrated text cleaning (optional, via text-cleaning-engine)
 

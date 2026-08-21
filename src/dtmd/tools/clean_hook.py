@@ -89,6 +89,53 @@ def clean_md(full_md_path, anonymize=False, form="markdown"):
     return True, out_path, f"已清洗 → {os.path.basename(out_path)}"
 
 
+def clean_watermark_md(full_md_path: str):
+    """渠道水印精准清除：调 text-cleaning-engine 的 clean_md --watermark-only，
+    只剥 QQ群/微信/邮箱等渠道广告水印，不动全文其他内容。就地覆盖 full_md_path。
+
+    用于块级清洗（页眉/页脚/页码）之后兜底文字特征水印（块级位置感知抓不到的）。
+    返回 (ok, out_path, msg)。未配置 DTM_CLEANER_PATH 时 ok=False 且 msg 含"未配置"。
+    """
+    if not _cleaner_path():
+        return False, None, "未配置 DTM_CLEANER_PATH，渠道水印跳过（text_watermark 未生效）"
+    if not os.path.exists(full_md_path):
+        return False, None, f"文件不存在: {full_md_path}"
+
+    cmd = [sys.executable, "-X", "utf8", "-m", "cleaner.clean_md",
+           full_md_path, "--watermark-only"]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = _cleaner_path() + os.pathsep + env.get("PYTHONPATH", "")
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=False, timeout=120, env=env)
+    except subprocess.TimeoutExpired:
+        return False, None, "渠道水印清洗超时(120s)"
+    except Exception as e:
+        return False, None, str(e)
+
+    if proc.returncode != 0:
+        return False, None, (f"渠道水印清洗失败: "
+                             f"{proc.stderr[-200:].decode('utf-8', 'replace') if proc.stderr else '无错误'}")
+
+    try:
+        import json
+        res = json.loads(proc.stdout.decode("utf-8", "replace").strip())
+        cleaned = res.get("cleaned_text") or res.get("text") or ""
+    except (json.JSONDecodeError, ValueError):
+        cleaned = proc.stdout.decode("utf-8", "replace")
+
+    if not cleaned.strip():
+        return False, None, "渠道水印清洗结果为空"
+
+    try:
+        with open(full_md_path, "w", encoding="utf-8") as f:
+            f.write(cleaned)
+    except OSError as e:
+        return False, None, f"写入失败: {e}"
+
+    return True, full_md_path, "渠道水印已清（QQ群/微信/邮箱）"
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python tools/clean_hook.py <full.md路径> [--anonymize]")

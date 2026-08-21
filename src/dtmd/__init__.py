@@ -7,4 +7,4 @@
     cli.py    统一 CLI 入口（`python -m dtmd <cmd>`）
     config.py 路径/环境配置（无硬编码绝对路径）
 """
-__version__ = "0.4.1"
+__version__ = "0.5.0"

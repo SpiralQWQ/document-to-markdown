@@ -83,6 +83,7 @@
 | 🧠 **质检系统（dtmd）** | L1 自动 · L2 表格复核 · L3 视觉复审 · 返工闭环 · 三色报告 |
 | ☁️ **云端模式** | MinerU API 批量上传→轮询→下载（5000 文件/天）|
 | 🧼 **清洗联动** | 接入 text-cleaning-engine（剥水印/导航/乱码）|
+| 🧽 **块级清洗** | 转写后自动剔除页眉/页脚/页码/水印（MinerU 类型 + 位置感知）|
 | 🔄 **断点续跑** | 自动跳过已转块；重跑续传不重复 |
 | 🖥️ **跨平台** | Windows / Linux / macOS（环境变量配路径）|
 
@@ -241,6 +242,29 @@ python -m dtmd convert --mode local --max 5         # 最多转 5 块
 python -m dtmd convert --mode cloud --complex --dry-run   # 预览会上传什么
 python -m dtmd convert --mode cloud --complex             # 上传并轮询复杂文档
 ```
+
+### 块级清洗（内置，默认自动）
+
+转换后会**自动清洗**产物：页眉/页脚、页码、重复的水印行（书名页眉、章节页眉、
+广告水印）在转换完成后立即从 `full.md` 剔除（本地与云端管线都生效）。
+检测结合 MinerU `content_list.json` 的块类型（`header`/`footer`/`page_number`/
+`page_footnote`）+ 位置感知兜底（MinerU 未标记的水印）+ 跨页重复确认 +
+短 key 过滤（防误删正文短词）。
+
+```bash
+# 清洗单个转写目录（就地覆盖 full.md）
+python -m dtmd clean path/to/xxx_mineru
+
+# 递归清洗根目录下所有转写目录（覆盖单块 + 多块 p{start}-{end} 子目录）
+python -m dtmd clean /path/to/kb --recursive
+
+# 预演：只报告会删多少行，不写回
+python -m dtmd clean /path/to/kb --recursive --dry-run
+```
+
+块级清洗内置。对于**文字特征水印**（QQ群/微信/邮箱签名——块级位置感知可能抓不到的），
+`dtmd clean` 还会调用 [**text-cleaning-engine**](https://github.com/SpiralQWQ/text-cleaning-engine)
+的精准 `--watermark-only` 模式——设置 `DTM_CLEANER_PATH` 启用（未设置则跳过）。
 
 ### 联动清洗（可选，接入 text-cleaning-engine）
 

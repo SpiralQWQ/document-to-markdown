@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-21
+
+### Added
+- **Block-level cleaning** (`dtmd.clean` package): strip page headers/footers/page
+  numbers/watermarks from MinerU conversion output (`full.md`). Detection combines
+  MinerU's `content_list.json` block types (`header`/`footer`/`page_number`/
+  `page_footnote`) with a position-aware fallback (top-edge short text blocks repeated
+  across pages) and cross-page dedup confirmation. Exposed as `clean_full_md` /
+  `clean_out_dir` / `find_content_list`; dry-run and fail-open (never blocks).
+- **`dtmd clean` CLI command**: clean one or many directories, `--recursive` (finds all
+  dirs containing `full.md`, covering both single-block and multi-block `p{start}-{end}`
+  subdirs), `--dry-run` (preview without writing), `--verbose`.
+- **Automatic cleaning on conversion**: `convert/local.py` and `convert/cloud.py` now
+  clean output immediately after conversion (fails open — never blocks the pipeline).
+- **Channel watermark removal (optional, via text-cleaning-engine)**: after block-level
+  cleaning, strip text-feature watermarks (QQ-group / WeChat / email signatures) through
+  text-cleaning-engine's precise `--watermark-only` entry. Only the watermark segments are
+  removed — the rest of the line/document is untouched (100% retention). Skipped (fails
+  open) when `DTM_CLEANER_PATH` is not set.
+
+### Fixed
+- Short noise keys (<4 chars, e.g. page numbers, single-char answers) no longer match
+  against body text during deletion, preventing accidental removal of short body words
+  (e.g. True/False quiz answers).
+- Out-of-range / abnormal bbox coordinates (y beyond page height) filtered out of
+  position-based detection.
+- Bottom-edge position detection removed — footer watermarks are already covered by
+  MinerU `footer` / `page_number` types; this avoids false positives on body text near
+  page bottoms.
+
+### Tests
+- `tests/test_block_clean.py` (synthetic data, no real documents required).
+- `tests/test_clean_cli.py` (CLI boundary: no-arg / missing dir / dry-run / recursive /
+  mixed / file-path input).
+
 ## [0.4.1] - 2026-08-13
 
 ### Added

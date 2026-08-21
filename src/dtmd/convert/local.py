@@ -456,6 +456,18 @@ def main(argv=None):
                 progress["issues"].append(f"Day{day_idx} {os.path.basename(block['file'])} p{block['start']}-{block['end']}: {err[:100]}")
                 save_progress(progress)
                 continue
+            # 块级清洗（默认自动）：剔除页眉/页脚/页码等结构噪音，就地覆盖 full.md
+            try:
+                from dtmd.clean.block_clean import clean_out_dir as _bclean
+                _r = _bclean(out_dir)
+                if _r.get("ok") and _r.get("removed"):
+                    print(f"    [清洗] 剔 {_r['removed']} 行页眉/页脚/页码噪音 "
+                          f"({_r['original_lines']}→{_r['clean_lines']})")
+                elif _r.get("error"):
+                    print(f"    [清洗跳过] {_r['error']}")
+                # skipped（无 content_list）静默，属正常
+            except Exception as e:  # 清洗失败不阻塞主流程
+                print(f"    [清洗跳过] {e}")
             # 验证输出
             v_ok, issues = verify_output(out_dir, block)
             if not v_ok:

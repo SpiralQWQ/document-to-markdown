@@ -340,6 +340,18 @@ def save_zip(t, zip_url):
         except OSError:
             pass
     print(f"  [保存] {os.path.basename(t['out'])} ← zip 已解压并删除（full.md+images+json 全保留）")
+    # 块级清洗（默认自动）：剔除页眉/页脚/页码噪音，就地覆盖 full.md
+    try:
+        from dtmd.clean.block_clean import clean_out_dir as _bclean
+        _r = _bclean(t["out"])
+        if _r.get("ok") and _r.get("removed"):
+            print(f"    [清洗] 剔 {_r['removed']} 行页眉/页脚/页码噪音 "
+                  f"({_r['original_lines']}→{_r['clean_lines']})")
+        elif _r.get("error"):
+            print(f"    [清洗跳过] {_r['error']}")
+        # skipped（无 content_list）静默，属正常
+    except Exception as e:  # 清洗失败不阻塞主流程
+        print(f"    [清洗跳过] {e}")
 
 
 def cleanup():

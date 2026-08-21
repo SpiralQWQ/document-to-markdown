@@ -190,6 +190,49 @@ def cmd_report(args):
     return 0
 
 
+def cmd_clean(args):
+    """clean 命令：块级清洗（剔页眉/页脚/页码噪音），就地覆盖 full.md。
+
+    用法:
+      python -m dtmd clean <转写目录...>          # 清洗指定目录
+      python -m dtmd clean <根目录> --recursive   # 递归找所有 *_mineru/ 清洗
+    """
+    from dtmd.clean.block_clean import clean_out_dir
+    import glob as _glob
+    targets = list(args._extra or [])
+    if args.recursive:
+        roots = targets or ["."]
+        found = []
+        for root in roots:
+            # 找所有含 full.md 的目录：单块(_mineru 根) + 多块(p{start}-{end} 子目录)都覆盖
+            for d in _glob.glob(os.path.join(root, "**"), recursive=True):
+                if os.path.isdir(d) and os.path.exists(os.path.join(d, "full.md")):
+                    found.append(d)
+        targets = sorted(found)
+    if not targets:
+        print("[clean] 未指定目录（用法: python -m dtmd clean <dir...> 或 --recursive 根目录）")
+        return 1
+    ok_n = skip_n = fail_n = removed_total = 0
+    for d in targets:
+        r = clean_out_dir(d, dry_run=args.dry_run)
+        if r.get("skipped"):
+            skip_n += 1
+            if args.verbose:
+                print(f"  [跳过] {os.path.basename(d)}: {r.get('reason')}")
+        elif r.get("ok"):
+            ok_n += 1
+            removed_total += r["removed"]
+            tag = "预演" if args.dry_run else "OK"
+            print(f"  [{tag}] {os.path.basename(d)}: 删 {r['removed']} 行 "
+                  f"({r['original_lines']}→{r['clean_lines']})")
+        else:
+            fail_n += 1
+            print(f"  [失败] {os.path.basename(d)}: {r.get('error')}")
+    mode = "预演(不写回)" if args.dry_run else "完成"
+    print(f"[clean] {mode}: 清洗 {ok_n} | 跳过 {skip_n} | 失败 {fail_n} | 共删 {removed_total} 行")
+    return 0 if fail_n == 0 else 1
+
+
 def cmd_convert(args):
     """convert 命令：转发到本地/云端管线（--mode local|cloud，默认 local）"""
     from dtmd.convert import cloud, local
@@ -211,6 +254,7 @@ COMMANDS = {
     "rework": (cmd_rework, "返工闭环（生成返工清单+重转命令）"),
     "report": (cmd_report, "生成三色质检报告"),
     "convert": (cmd_convert, "转换管线（--mode local|cloud，默认 local）"),
+    "clean": (cmd_clean, "块级清洗（剔除转写产物页眉/页脚/页码噪音）"),
 }
 
 
@@ -254,6 +298,10 @@ def build_parser():
                     help="convert 管线（默认 local）")
     ap.add_argument("--max", type=int, default=None, dest="max",
                     help="convert 用：最多转 N 块（local 管线）")
+    ap.add_argument("--recursive", action="store_true",
+                    help="clean 用：递归查找根目录下所有 *_mineru/ 转写目录")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="clean 用：预演模式，只统计删除行数不写回 full.md")
     return ap
 
 

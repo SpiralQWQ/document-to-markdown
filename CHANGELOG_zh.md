@@ -6,6 +6,33 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-21
+
+### 新增
+- **块级清洗**（`dtmd.clean` 包）：剔除 MinerU 转写产物 full.md 里的页眉/页脚/页码/水印。
+  检测结合 MinerU `content_list.json` 的块类型（`header`/`footer`/`page_number`/
+  `page_footnote`）+ 位置感知兜底（跨页重复的贴顶矮块）+ 跨页重复确认。提供
+  `clean_full_md` / `clean_out_dir` / `find_content_list`；支持 dry-run 预演与
+  fail-open（清洗失败不阻塞主流程）。
+- **`dtmd clean` CLI 命令**：清洗单个/多个目录，`--recursive`（递归找所有含 full.md 的
+  目录，覆盖单块与多块 `p{start}-{end}` 子目录）、`--dry-run`（预演不写回）、`--verbose`。
+- **转写流程默认自动清洗**：`convert/local.py` 与 `convert/cloud.py` 转写完成后立即清洗
+  （fail-open——失败不阻塞转写管线）。
+- **渠道水印清除（可选，接入 text-cleaning-engine）**：块级清洗后，通过 text-cleaning-engine
+  的精准 `--watermark-only` 入口剥掉文字特征水印（QQ群/微信/邮箱签名）。只剥水印段，
+  行/文档其余内容不动（保留率 100%）。未设置 `DTM_CLEANER_PATH` 时跳过（fail-open）。
+
+### 修复
+- 短噪音 key（<4 字符，如页码、单字答案）不再参与全文匹配删除，防止误删正文短词
+  （如判断题"对/错"答案）。
+- 越界/异常 bbox（y 超页高）不参与位置判定。
+- 去掉底部位置感知——页脚水印已由 MinerU `footer`/`page_number` 类型直接收集，
+  避免误判页面底部附近的正文。
+
+### 测试
+- `tests/test_block_clean.py`（合成数据，无需真实文档）。
+- `tests/test_clean_cli.py`（CLI 边界：无参数/目录不存在/dry-run/recursive/混合/文件路径）。
+
 ## [0.4.1] — 2026-08-13
 
 ### 新增
