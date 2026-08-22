@@ -282,7 +282,12 @@ def main(argv=None):
                               "is_ocr": ocr, "model_version": _model_version(t["tmp"])} for t in group],
                    "model_version": _model_version(group[0]["tmp"])}
         r = http("POST", f"{API}/file-urls/batch", headers=h, json=payload, timeout=60)
-        rj = r.json()
+        try:
+            rj = r.json()
+        except Exception:
+            err(f"申请上传链接失败: HTTP {r.status_code}, 响应非 JSON: {r.text[:200]}"); sys.exit(1)
+        if not isinstance(rj, dict):
+            err(f"申请上传链接失败: 响应格式异常: {str(rj)[:200]}"); sys.exit(1)
         if rj.get("code") != 0:
             err(f"申请上传链接失败: {rj.get('msg')}"); sys.exit(1)
         batch_id = rj["data"]["batch_id"]
@@ -458,7 +463,12 @@ def _html_mode(args, dry, ocr, limit, budget):
                               "model_version": _model_version(t["tmp"])} for t in group],
                    "model_version": _model_version(group[0]["tmp"])}
         r = http("POST", f"{API}/file-urls/batch", headers=h, json=payload, timeout=60)
-        rj = r.json()
+        try:
+            rj = r.json()
+        except Exception:
+            err(f"申请上传链接失败: HTTP {r.status_code}, 响应非 JSON: {r.text[:200]}"); sys.exit(1)
+        if not isinstance(rj, dict):
+            err(f"申请上传链接失败: 响应格式异常: {str(rj)[:200]}"); sys.exit(1)
         if rj.get("code") != 0:
             err(f"申请上传链接失败: {rj.get('msg')}"); return 1
         batch_id = rj["data"]["batch_id"]
