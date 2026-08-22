@@ -285,17 +285,16 @@ def cmd_plan(args):
     智能切片流程：
       1. 扫描目录下所有 PDF
       2. 对每本 PDF 获取页数 + TOC（目录）
-      3. 有 TOC → 按章节边界切（≤200 页/块）
+      3. 有 TOC → 按章节边界切（≤200 页/块），保证内容完整
       4. 无 TOC 但有大标题 → 按标题位置切
       5. 都没有 → 硬切 200 页
-      6. 大书（>200 页或 >50MB）→ 标记为复杂文档（走复杂模式，强制 OCR）
-      7. 普通文档 → 按天分组
+      6. 所有块统一走云端管线（不分普通/复杂），按天分组
     """
     import json
     import fitz
 
     from dtmd import config as _paths
-    from dtmd.convert.base import smart_slice, _slice_hard, MAX_PAGES_PER_FILE
+    from dtmd.convert.base import smart_slice, MAX_PAGES_PER_FILE
 
     # 收集参数
     extra = list(args._extra or [])
@@ -307,9 +306,6 @@ def cmd_plan(args):
     out_path = args.out or _paths.PLAN
     dry_run = args.dry_run
     budget = args.budget or 5000
-    # 大书阈值：>200 页 或 >50MB → 走复杂模式（强制 OCR）
-    COMPLEX_PAGE_THRESHOLD = 200
-    COMPLEX_SIZE_MB = 50
 
     # 扫描所有 PDF
     all_pdfs = []
@@ -331,8 +327,7 @@ def cmd_plan(args):
     all_pdfs.sort()
     print(f"[plan] 扫描到 {len(all_pdfs)} 个 PDF，正在分析页数 + 目录结构...")
 
-    complex_blocks = []
-    normal_blocks = []
+    all_blocks = []
     total_pages = 0
 
     for fp in all_pdfs:
@@ -344,28 +339,22 @@ def cmd_plan(args):
             print(f"  [跳过] 无法读取: {os.path.basename(fp)}")
             continue
 
-        size_mb = os.path.getsize(fp) / 1024 / 1024
-        is_complex = pages > COMPLEX_PAGE_THRESHOLD or size_mb > COMPLEX_SIZE_MB
-
-        # 智能切片
-        if is_complex:
+        # 所有文件统一处理：超过 200 页的智能切片，否则单块
+        if pages > MAX_PAGES_PER_FILE:
             blocks = smart_slice(fp, pages, MAX_PAGES_PER_FILE)
+            print(f"  {os.path.basename(fp)}: {pages}页 → 切 {len(blocks)} 块")
         else:
             blocks = [{"file": fp, "kind": "PDF", "start": 1, "end": pages, "pages": pages}]
+            print(f"  {os.path.basename(fp)}: {pages}页 → 1 块")
 
         total_pages += pages
-        if is_complex:
-            complex_blocks.extend(blocks)
-            print(f"  [复杂] {os.path.basename(fp)}: {pages}页, {size_mb:.1f}MB → {len(blocks)} 块")
-        else:
-            normal_blocks.extend(blocks)
-            print(f"  [普通] {os.path.basename(fp)}: {pages}页 → 1 块")
+        all_blocks.extend(blocks)
 
-    # 普通文档按天分组
+    # 按天分组（每天 ≤ budget 页）
     days = []
     day_blocks = []
     day_pages = 0
-    for b in normal_blocks:
+    for b in all_blocks:
         if day_pages + b["pages"] > budget and day_blocks:
             days.append({"day": len(days) + 1, "blocks": day_blocks})
             day_blocks = []
@@ -375,21 +364,11 @@ def cmd_plan(args):
     if day_blocks:
         days.append({"day": len(days) + 1, "blocks": day_blocks})
 
-    plan = {
-        "days_normal": days,
-        "pending_complex": complex_blocks
-    }
+    plan = {"days_normal": days}
 
-    # 输出统计
-    normal_count = sum(len(d["blocks"]) for d in days)
-    normal_pages = sum(sum(b["pages"] for b in d["blocks"]) for d in days)
-    complex_count = len(complex_blocks)
-    complex_pages = sum(b["pages"] for b in complex_blocks)
-
-    print(f"\n[plan] 统计:")
-    print(f"  普通: {len(days)} 天, {normal_count} 块, {normal_pages} 页")
-    print(f"  复杂: {complex_count} 块, {complex_pages} 页")
-    print(f"  总计: {normal_count + complex_count} 块, {normal_pages + complex_pages} 页")
+    block_count = sum(len(d["blocks"]) for d in days)
+    block_pages = sum(sum(b["pages"] for b in d["blocks"]) for d in days)
+    print(f"\n[plan] 统计: {len(days)} 天, {block_count} 块, {block_pages} 页")
 
     if dry_run:
         print(f"[plan] DRY-RUN 完成，未写文件")
