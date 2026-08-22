@@ -5,6 +5,9 @@ runner.py — QA 主控（L1/L2/L3 三层 + 返工闭环）
 
 用法:
   python -m dtmd list [--scope all|complex|normal] [--verbose]
+  python -m dtmd convert --mode cloud --html <路径>    # HTML 云端转写
+  python -m dtmd convert --mode cloud --html-dir <目录> # 目录下所有 HTML
+  python -m dtmd clean [--recursive] [--dry-run]       # 块级清洗
   （L1/L2/L3/返工/报告 子命令由后续 Task 增量接入）
 
 参数设计: cmd 为位置参数，--scope/--verbose 在同一解析器上 → 参数位置随意，
@@ -270,8 +273,200 @@ def cmd_convert(args):
     return main_fn(extra)
 
 
+def cmd_plan(args):
+    """plan 命令：扫描目录 → 智能切片 → 生成 plan.json。
+
+    用法:
+      python -m dtmd plan <目录>                              # 扫描并生成 plan.json（默认 _data/plan.json）
+      python -m dtmd plan <目录> --output <路径>               # 指定输出路径
+      python -m dtmd plan <目录> --dry-run                     # 只预览，不写文件
+      python -m dtmd plan <目录> --budget 3000                 # 设置每日页数预算
+
+    智能切片流程：
+      1. 扫描目录下所有 PDF
+      2. 对每本 PDF 获取页数 + TOC（目录）
+      3. 有 TOC → 按章节边界切（≤200 页/块）
+      4. 无 TOC 但有大标题 → 按标题位置切
+      5. 都没有 → 硬切 200 页
+      6. 大书（>200 页或 >50MB）→ 标记为复杂文档（走复杂模式，强制 OCR）
+      7. 普通文档 → 按天分组
+    """
+    import json
+    import fitz
+
+    from dtmd import config as _paths
+    from dtmd.convert.base import smart_slice, _slice_hard, MAX_PAGES_PER_FILE
+
+    # 收集参数
+    extra = list(args._extra or [])
+    targets = [a for a in extra if not a.startswith("-")]
+    if not targets:
+        print("[plan] 用法: python -m dtmd plan <目录> [--output <路径>] [--dry-run]")
+        return 1
+
+    out_path = args.out or _paths.PLAN
+    dry_run = args.dry_run
+    budget = args.budget or 5000
+    # 大书阈值：>200 页 或 >50MB → 走复杂模式（强制 OCR）
+    COMPLEX_PAGE_THRESHOLD = 200
+    COMPLEX_SIZE_MB = 50
+
+    # 扫描所有 PDF
+    all_pdfs = []
+    for target in targets:
+        if os.path.isfile(target) and target.lower().endswith(".pdf"):
+            all_pdfs.append(target)
+        elif os.path.isdir(target):
+            for root, _dirs, files in os.walk(target):
+                for f in files:
+                    if f.lower().endswith(".pdf"):
+                        all_pdfs.append(os.path.join(root, f))
+        else:
+            print(f"  [跳过] 非 PDF 或不存在: {target}")
+
+    if not all_pdfs:
+        print("[plan] 未找到 PDF 文件")
+        return 1
+
+    all_pdfs.sort()
+    print(f"[plan] 扫描到 {len(all_pdfs)} 个 PDF，正在分析页数 + 目录结构...")
+
+    complex_blocks = []
+    normal_blocks = []
+    total_pages = 0
+
+    for fp in all_pdfs:
+        try:
+            doc = fitz.open(fp)
+            pages = doc.page_count
+            doc.close()
+        except Exception:
+            print(f"  [跳过] 无法读取: {os.path.basename(fp)}")
+            continue
+
+        size_mb = os.path.getsize(fp) / 1024 / 1024
+        is_complex = pages > COMPLEX_PAGE_THRESHOLD or size_mb > COMPLEX_SIZE_MB
+
+        # 智能切片
+        if is_complex:
+            blocks = smart_slice(fp, pages, MAX_PAGES_PER_FILE)
+        else:
+            blocks = [{"file": fp, "kind": "PDF", "start": 1, "end": pages, "pages": pages}]
+
+        total_pages += pages
+        if is_complex:
+            complex_blocks.extend(blocks)
+            print(f"  [复杂] {os.path.basename(fp)}: {pages}页, {size_mb:.1f}MB → {len(blocks)} 块")
+        else:
+            normal_blocks.extend(blocks)
+            print(f"  [普通] {os.path.basename(fp)}: {pages}页 → 1 块")
+
+    # 普通文档按天分组
+    days = []
+    day_blocks = []
+    day_pages = 0
+    for b in normal_blocks:
+        if day_pages + b["pages"] > budget and day_blocks:
+            days.append({"day": len(days) + 1, "blocks": day_blocks})
+            day_blocks = []
+            day_pages = 0
+        day_blocks.append(b)
+        day_pages += b["pages"]
+    if day_blocks:
+        days.append({"day": len(days) + 1, "blocks": day_blocks})
+
+    plan = {
+        "days_normal": days,
+        "pending_complex": complex_blocks
+    }
+
+    # 输出统计
+    normal_count = sum(len(d["blocks"]) for d in days)
+    normal_pages = sum(sum(b["pages"] for b in d["blocks"]) for d in days)
+    complex_count = len(complex_blocks)
+    complex_pages = sum(b["pages"] for b in complex_blocks)
+
+    print(f"\n[plan] 统计:")
+    print(f"  普通: {len(days)} 天, {normal_count} 块, {normal_pages} 页")
+    print(f"  复杂: {complex_count} 块, {complex_pages} 页")
+    print(f"  总计: {normal_count + complex_count} 块, {normal_pages + complex_pages} 页")
+
+    if dry_run:
+        print(f"[plan] DRY-RUN 完成，未写文件")
+        return 0
+
+    # 备份旧 plan
+    if os.path.exists(out_path):
+        import shutil
+        bak = out_path.replace(".json", f"_bak_{os.path.basename(targets[0])}_{total_pages}p.json")
+        shutil.copy2(out_path, bak)
+        print(f"[plan] 旧 plan 已备份: {bak}")
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(plan, f, ensure_ascii=False, indent=2)
+    print(f"[plan] plan.json 已写入: {out_path}")
+    return 0
+
+
+def cmd_merge(args):
+    """merge 命令：合并切片输出（p{start}-{end}/full.md → 完整 full.md）。
+
+    用法:
+      python -m dtmd merge <目录>                     # 合并指定 _mineru/ 目录
+      python -m dtmd merge <目录> --recursive          # 递归合并所有 _mineru/
+      python -m dtmd merge <目录> --dry-run            # 只预览，不写文件
+    """
+    from dtmd.convert.base import merge_mineru_dir
+
+    extra = list(args._extra or [])
+    targets = [a for a in extra if not a.startswith("-")]
+    recursive = args.recursive
+
+    if not targets:
+        targets = ["."]
+
+    ok_n = skip_n = fail_n = 0
+    all_targets = []
+
+    for t in targets:
+        if recursive and os.path.isdir(t):
+            for root, dirs, _files in os.walk(t):
+                for d in dirs:
+                    if d.endswith("_mineru"):
+                        all_targets.append(os.path.join(root, d))
+        elif os.path.isdir(t):
+            all_targets.append(t)
+        else:
+            print(f"  [跳过] 目录不存在: {t}")
+
+    if not all_targets:
+        print("[merge] 未找到 _mineru/ 目录")
+        return 1
+
+    for d in sorted(set(all_targets)):
+        r = merge_mineru_dir(d, dry_run=args.dry_run)
+        if r.get("error"):
+            if "未找到切片" in r["error"]:
+                skip_n += 1
+                if args.verbose:
+                    print(f"  [跳过] {os.path.basename(d)}: {r['error']}")
+            else:
+                fail_n += 1
+                print(f"  [失败] {os.path.basename(d)}: {r['error']}")
+        else:
+            ok_n += 1
+            tag = "预演" if args.dry_run else "合并"
+            print(f"  [{tag}] {os.path.basename(d)}: {r['merged']} 片 → {r['output']}")
+
+    mode = "预演(不写回)" if args.dry_run else "完成"
+    print(f"[merge] {mode}: 合并 {ok_n} | 跳过 {skip_n} | 失败 {fail_n}")
+    return 0 if fail_n == 0 else 1
+
+
 COMMANDS = {
     "list": (cmd_list, "列出块清单与完成状态"),
+    "plan": (cmd_plan, "扫描目录 → 智能切片 → 生成 plan.json"),
+    "merge": (cmd_merge, "合并切片输出（p{start}-{end}/full.md → 完整 full.md）"),
     "l1": (cmd_l1, "L1 自动检查（完整性/页数/md_lint/图片引用）"),
     "l2": (cmd_l2, "L2 表格复核（camelot）"),
     "l3": (cmd_l3, "L3 复审计划（选目标+选页+成本预估）"),
@@ -322,6 +517,8 @@ def build_parser():
                     help="convert 管线（默认 local）")
     ap.add_argument("--max", type=int, default=None, dest="max",
                     help="convert 用：最多转 N 块（local 管线）")
+    ap.add_argument("--budget", type=int, default=None,
+                    help="plan 用：每日页数预算（默认 5000）")
     ap.add_argument("--recursive", action="store_true",
                     help="clean 用：递归查找根目录下所有 *_mineru/ 转写目录")
     ap.add_argument("--dry-run", action="store_true",

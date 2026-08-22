@@ -1,139 +1,138 @@
-# Output Layout — Conversion Output Directory Structure
+# Output Layout — 转写输出目录结构规范
 
-> This document defines the output directory layout for all `document-to-markdown` conversion pipelines:
-> cloud API (`cloud.py`), local pipeline (`local.py`), and HTML cloud conversion (`_html_mode()`).
-
----
-
-## Principles
-
-1. **Isolation**: each source file gets its own `{basename}_mineru/` directory, co-located with the source
-2. **No overwrite**: MinerU raw output `.md` is preserved; cleaned output is `full.md` (separate file)
-3. **Multi-slice**: PDFs exceeding 200 pages are split into `p{start}-{end}/` subdirectories
-4. **Images**: all extracted images go into `images/` subdirectory
+> 本文档定义 `document-to-markdown` 所有转写产物的输出目录布局。
+> 适用：云端管线（`cloud.py`）、本地管线（`local.py`）、HTML 云端转写（`_html_mode()`）。
 
 ---
 
-## Single-block Output (PDF/DOC/PPT ≤ 200 pages, or single HTML file)
+## 基本原则
+
+1. **隔离**：每个原文件独立目录 `{原文件名}_mineru/`，与原文件同目录
+2. **不覆盖**：MinerU 原始输出 `.md` 保留，清洗后的 `full.md` 另存
+3. **多块切片**：PDF 超过 200 页会被切片，每片一个子目录 `p{start}-{end}/`
+4. **图片目录**：所有提取的图片统一放在 `images/` 子目录
+
+---
+
+## 单块输出（PDF/DOC/PPT ≤ 200 页，或 HTML 单文件）
 
 ```
-{source_dir}/
-└── {basename}_mineru/
-    ├── full.md                         ← Final cleaned Markdown (block_clean + channel watermark)
-    ├── {basename}.md                    ← MinerU raw Markdown output (uncleaned)
-    ├── {basename}_content_list.json     ← Block-level content list (used by block_clean)
-    ├── {basename}_content_list_v2.json  ← v2 content list (backup, not used by cleaning)
-    ├── {basename}_layout.pdf            ← MinerU layout analysis PDF
-    ├── {basename}_middle.json           ← MinerU intermediate results
-    ├── {basename}_model.json            ← MinerU model inference results
-    ├── {basename}_origin.pdf            ← Original PDF page backup (PDF sources only)
-    ├── {basename}_span.pdf              ← MinerU column analysis PDF
+{原文件所在目录}/
+└── {原文件名}_mineru/
+    ├── full.md                         ← 清洗后的最终 Markdown（block_clean + 渠道水印）
+    ├── {原文件名}.md                    ← MinerU 原始输出的 Markdown（未清洗）
+    ├── {原文件名}_content_list.json     ← 块级内容列表（block_clean 清洗依据）
+    ├── {原文件名}_content_list_v2.json  ← v2 版内容列表（备用）
+    ├── {原文件名}_layout.pdf            ← MinerU 版式分析 PDF
+    ├── {原文件名}_middle.json           ← MinerU 中间结果
+    ├── {原文件名}_model.json            ← MinerU 模型推理结果
+    ├── {原文件名}_origin.pdf            ← 原始 PDF 分页备份（仅 PDF 源文件）
+    ├── {原文件名}_span.pdf              ← MinerU 分栏分析 PDF
     └── images/
-        ├── abc123.jpg                   ← Extracted images
+        ├── abc123.jpg                   ← 提取的图片
         └── ...
 ```
 
-### HTML Output
+### HTML 文件输出
 
-HTML files go through `_html_mode()`. The output structure is similar but includes `main.html`:
+HTML 走 `_html_mode()`，输出目录结构同上，但多一个 `main.html` 文件：
 
 ```
-{source_dir}/
-└── {basename}_mineru/
-    ├── full.md                         ← Final cleaned Markdown
-    ├── main.html                       ← Original HTML backup
-    ├── content_list.json               ← Block-level content list (used by cleaning)
+{原文件所在目录}/
+└── {原文件名}_mineru/
+    ├── full.md                         ← 清洗后的最终 Markdown
+    ├── main.html                       ← 原始 HTML 备份
+    ├── content_list.json               ← 块级内容列表（清洗依据）
     └── images/
         └── ...
 ```
 
-> HTML is not sliced (uploaded as-is). No `{basename}.md` / `_origin.pdf` / `_layout.pdf` / etc.
+> HTML 不切片（整文件上传），无 `{原文件名}.md` / `_origin.pdf` / `_layout.pdf` 等非 HTML 产物。
 
 ---
 
-## Multi-block Output (PDF > 200 pages, sliced for upload)
+## 多块输出（PDF > 200 页，被切片上传）
 
 ```
-{source_dir}/
-└── {basename}_mineru/
-    ├── p1-200/                         ← Pages 1-200
+{原文件所在目录}/
+└── {原文件名}_mineru/
+    ├── p1-200/                         ← 第 1-200 页
     │   ├── full.md
-    │   ├── {basename}_content_list.json
-    │   ├── {basename}_model.json
-    │   ├── {basename}_origin.pdf
+    │   ├── {原文件名}_content_list.json
+    │   ├── {原文件名}_model.json
+    │   ├── {原文件名}_origin.pdf
     │   └── images/
     │       └── ...
-    ├── p201-400/                       ← Pages 201-400
+    ├── p201-400/                       ← 第 201-400 页
     │   ├── full.md
-    │   ├── {basename}_content_list.json
-    │   ├── {basename}_model.json
-    │   ├── {basename}_origin.pdf
+    │   ├── {原文件名}_content_list.json
+    │   ├── {原文件名}_model.json
+    │   ├── {原文件名}_origin.pdf
     │   └── images/
     │       └── ...
-    └── p401-552/                       ← Pages 401-552
+    └── p401-552/                       ← 第 401-552 页
         ├── full.md
         └── ...
 ```
 
-> Slice rule: ≤ 200 pages per slice, named `p{start}-{end}`. Each slice is self-contained with its own `full.md` + `content_list.json` + `images/`.
+> 切片规则：每片 ≤ 200 页，起止页码 `p{start}-{end}` 命名。每片独立输出，各自有完整 `full.md` + `content_list.json` + `images/`。
 
 ---
 
-## File Descriptions
+## 文件说明
 
-### Final Output (for direct use)
+### 最终产物（用户直接使用）
 
-| File | Generated by | Purpose |
-|------|-------------|---------|
-| `full.md` | block_clean post-processing | **AI-ready Markdown** (RAG / agent pipelines / note generation) |
-| `images/` | MinerU extraction | Image references (linked from `full.md` via `![](...)`) |
+| 文件 | 生成方式 | 用途 |
+|------|---------|------|
+| `full.md` | block_clean 清洗后写入 | **AI 喂料**（RAG / Agent 管线 / 笔记生成） |
+| `images/` | MinerU 提取 | 图片引用（`full.md` 中通过 `![](...)` 引用） |
 
-### MinerU Raw Output (debugging / QA)
+### MinerU 原始产物（调试 / 质检用）
 
-| File | Purpose |
-|------|---------|
-| `{basename}.md` | MinerU raw Markdown (uncleaned, includes headers/footers/page numbers) |
-| `{basename}_content_list.json` | Block-level content list (type / text / bbox / page_idx per block) |
-| `{basename}_content_list_v2.json` | v2 content list (backup; `_v2` suffix is excluded from cleaning) |
-| `{basename}_layout.pdf` | Layout analysis visualization PDF |
-| `{basename}_middle.json` | MinerU intermediate processing results |
-| `{basename}_model.json` | Model inference results (OCR text, coordinates, confidence) |
-| `{basename}_origin.pdf` | Original PDF page-by-page backup (PDF sources only) |
-| `{basename}_span.pdf` | Column analysis visualization PDF |
+| 文件 | 用途 |
+|------|------|
+| `{原文件名}.md` | MinerU 原始 Markdown（未清洗，含页眉/页脚/页码噪音） |
+| `{原文件名}_content_list.json` | 块级内容列表（每块含 type / text / bbox / page_idx） |
+| `{原文件名}_content_list_v2.json` | v2 版内容列表（备用，`_v2` 后缀不会参与清洗读取） |
+| `{原文件名}_layout.pdf` | 版式分析可视化 PDF |
+| `{原文件名}_middle.json` | MinerU 中间处理结果 |
+| `{原文件名}_model.json` | 模型推理结果（含 OCR 文本、坐标、置信度） |
+| `{原文件名}_origin.pdf` | 原始 PDF 分页备份（仅 PDF 源文件） |
+| `{原文件名}_span.pdf` | 分栏分析可视化 PDF |
 
-### HTML-specific Files
+### HTML 特有产物
 
-| File | Purpose |
-|------|---------|
-| `main.html` | Original HTML file backup |
-
----
-
-## Naming Convention
-
-| Field | Rule | Example |
-|-------|------|---------|
-| `{basename}` | `safe()` sanitized filename (no extension, special chars replaced) | `Python入门经典` |
-| `{basename}_mineru` | Output directory suffix | `Python入门经典_mineru/` |
-| `p{start}-{end}` | Multi-block subdirectory, 1-indexed page numbers | `p1-200`, `p201-400` |
-| `images/` | Fixed directory name, does not change per file | `images/` |
+| 文件 | 用途 |
+|------|------|
+| `main.html` | 原始 HTML 文件备份 |
 
 ---
 
-## Cloud Conversion Quotas
+## 命名规则
 
-| Limit | Value | Notes |
-|-------|-------|-------|
-| Max file size | 200 MB | MinerU API limit |
-| Max pages per file | 200 pages | Must slice and upload in batches |
-| Daily file limit | ~5000 files | Error code `-60018`: daily parsing task count limit reached |
-| Daily high-priority quota | 1000 pages | Highest priority queue |
-| Daily page budget | 5000 pages (`--budget` adjustable) | Beyond 1000 → lower priority queue (not blocked) |
-| Batch upload size | ≤ 50 files/batch | API single-batch upload limit |
-| Batch task count | ≤ 200 | API single-batch task limit |
-| HTML quota | Separate | Error code `-60019`: insufficient HTML quota |
-| Poll timeout | 2 hours | `cloud.py` `MAX_WAIT = 7200` seconds |
+| 字段 | 规则 | 示例 |
+|------|------|------|
+| `{原文件名}` | `safe()` 处理后的文件名（去掉扩展名，特殊字符替换） | `Python编程入门经典` |
+| `{原文件名}_mineru` | 输出目录后缀 | `Python编程入门经典_mineru/` |
+| `p{start}-{end}` | 多块子目录，页码从 1 开始 | `p1-200`、`p201-400` |
+| `images/` | 图片目录名固定，不随文件名变化 | `images/` |
 
-> Adjust budget with `--budget N` (default 5000 pages). Use `--limit N` to cap blocks.
-> Blocks exceeding budget are skipped automatically and carried to the next run.
-> HTML parsing uses a separate quota from PDF/DOC/PPT — page counts do not overlap.
+---
+
+## 云端转写限额
+
+| 限制项 | 值 | 说明 |
+|--------|----|------|
+| 单文件大小 | ≤ 200 MB | MinerU API 限制 |
+| 单文件页数 | ≤ 200 页 | 超过需切片，分批上传 |
+| 每日高优额度 | 1000 页 | 最高优先级队列 |
+| 每日页数预算 | 5000 页（`--budget` 可调） | 超出 1000 页部分降级排队（不封死） |
+| 每日文件数上限 | 由账号额度决定 | 错误码 `-60018`：每日解析任务数量已达上限 |
+| 批量上传 | ≤ 50 文件/批 | API 单次 batch upload 上限 |
+| 批量提交 | ≤ 200 个 | API 单次 batch task 上限 |
+| HTML 额度 | 独立配额 | 错误码 `-60019`：html 文件解析额度不足 |
+| 轮询超时 | 2 小时 | `cloud.py` `MAX_WAIT = 7200` 秒 |
+
+> 预算通过 `--budget N` 调整（默认 5000 页），`--limit N` 限制块数。超预算块自动跳过，留到下次。
+> HTML 解析使用独立额度，与 PDF/DOC/PPT 不共享页数配额。
