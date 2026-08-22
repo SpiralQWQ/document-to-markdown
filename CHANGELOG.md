@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-22
+
+### Added
+- **Smart slicing** (`base.py`): `smart_slice()` with three-tier fallback (TOC → font-size
+  heading detection → hard cut). TOC slicing uses top-level headings only to avoid
+  overly granular splits. Ensures content integrity within the 200-page API limit.
+- **`dtmd plan` command**: scan a directory of PDFs, analyze page counts and TOC, generate
+  `plan.json` with smart-sliced blocks. All files go through a single pipeline (no
+  complex/normal distinction).
+- **`dtmd merge` command**: merge sliced output (`p{start}-{end}/full.md`) back into a single
+  `full.md` at the `_mineru/` root. Supports `--recursive` and `--dry-run`.
+- **200-page validation warning** (`cloud.py`): blocks exceeding 200 pages are skipped with
+  a warning before upload, preventing API rejection.
+
+### Fixed
+- `cloud.py` comments now correctly document API limits (5000 files/day, 200 pages/file,
+  1000 pages high-priority).
+- `base.py` module docstring now includes full API limit documentation.
+- Removed unused `import glob` from `merge_mineru_dir()`.
+
 ## [0.5.1] - 2026-08-22
 
 ### Added
