@@ -126,10 +126,12 @@ HTML files go through `_html_mode()`. The output structure is similar but includ
 |-------|-------|-------|
 | Max file size | 200 MB | MinerU API limit |
 | Max pages per file | 200 pages | Must slice and upload in batches |
+| Daily file limit | ~5000 files | Error code `-60018`: daily parsing task count limit reached |
 | Daily high-priority quota | 1000 pages | Highest priority queue |
-| Daily overflow limit | 5000 pages | Beyond 1000 → lower priority queue (not blocked) |
+| Daily page budget | 5000 pages (`--budget` adjustable) | Beyond 1000 → lower priority queue (not blocked) |
+| Batch upload size | ≤ 50 files/batch | API single-batch upload limit |
+| Batch task count | ≤ 200 | API single-batch task limit |
 | HTML quota | Separate | Error code `-60019`: insufficient HTML quota |
-| Batch upload size | ≤ 50 files/batch | API single-batch limit |
 | Poll timeout | 2 hours | `cloud.py` `MAX_WAIT = 7200` seconds |
 
 > Adjust budget with `--budget N` (default 5000 pages). Use `--limit N` to cap blocks.

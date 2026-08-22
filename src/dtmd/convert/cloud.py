@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MinerU 每日转换执行脚本（PDF+PPT+DOC → 喂 AI 的 md）
+MinerU 云端转换执行脚本（PDF+PPT+DOC+HTML → 喂 AI 的 md）
 
 用法:
   python -m dtmd convert --mode cloud 1                # 转换 Day 1
@@ -9,11 +9,16 @@ MinerU 每日转换执行脚本（PDF+PPT+DOC → 喂 AI 的 md）
   python -m dtmd convert --mode cloud 1 --limit 2      # 只处理前 2 块（试跑）
   python -m dtmd convert --mode cloud 1 --ocr          # 扫描件强制 OCR
   python -m dtmd convert --mode cloud 1 --force        # 强制重转：绕过"已转跳过"，覆盖旧输出
+  python -m dtmd convert --mode cloud --html 网页.html   # HTML 文件云端转写
+  python -m dtmd convert --mode cloud --html-dir ./目录  # 目录下所有 HTML 文件
 
 流程: 本地切片 → 批量上传 → 轮询 → 下载 zip → 解压全量 → 删 zip
+      HTML 不切片，整文件上传，model_version 自动选 MinerU-HTML
 输出: 每原文件解压到 {原文件目录}/{原文件名}_mineru/ 独立子文件夹
       多块大文件 → {原名}_mineru/p{start}-{end}/ 分子文件夹
+      HTML → {原名}_mineru/ 根目录（单块）
       full.md + images/ + json 全保留
+      详见 _docs/output_layout.md（本地）或 docs/output-layout.md（开源）
 """
 import os, sys, json, time, zipfile, re
 import shutil
@@ -98,9 +103,11 @@ def main(argv=None):
     complex_mode = "--complex" in args
     html_mode = "--html" in args
     limit = None
-    # 默认预算：充分利用每日 5000 文件上限（接受超额走慢速队列）。
-    # 前 1000 页优先队列快跑，超额部分优先级降低但仍会解析（不丢）。
-    # 之前默认 1000 页/单次，拆多次会超日累计；现在一次排到 5000 页上限，充分利用云端。
+    # MinerU API 限额：
+    #   - 每日文件数上限：约 5000 个/天（错误码 -60018：每日解析任务数量已达上限）
+    #   - 单文件页数上限：200 页（超出需切片，见 base.py make_slice）
+    #   - 每日高优额度：前 1000 页最高优先级，超额降级排队（不封死）
+    # --budget 是页数预算（默认 5000 页），防止单次提交过多；文件数超限由 API 返回 -60018。
     budget = 5000
     only_keyword = None
     if "--limit" in args:
@@ -163,6 +170,10 @@ def main(argv=None):
         os.makedirs(SLICE, exist_ok=True)
         tasks = []
         for i, b in enumerate(blocks):
+            if b["pages"] > 200:
+                print(f"  [警告] {os.path.basename(b['file'])} p{b['start']}-{b['end']} "
+                      f"共 {b['pages']} 页，超过 200 页上限，API 将拒绝！")
+                continue
             out_dir = compute_out_dir(b, file_counts)
             if not FORCE and is_done(out_dir):
                 print(f"  跳过(已完成): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
@@ -229,8 +240,14 @@ def main(argv=None):
     os.makedirs(SLICE, exist_ok=True)
 
     # 生成上传任务清单（跳过已完成）
+    # 页数校验：MinerU API 单文件 ≤200 页，超过则告警（应在 plan 生成时已切片）
+    MAX_PAGES_PER_FILE = 200
     tasks = []
     for i, b in enumerate(blocks):
+        if b["pages"] > MAX_PAGES_PER_FILE:
+            print(f"  [警告] {os.path.basename(b['file'])} p{b['start']}-{b['end']} "
+                  f"共 {b['pages']} 页，超过 {MAX_PAGES_PER_FILE} 页上限，API 将拒绝！")
+            continue
         orig_dir = os.path.dirname(b["file"])
         base = safe(os.path.splitext(os.path.basename(b["file"]))[0])
         out_root = os.path.join(orig_dir, base + "_mineru")
