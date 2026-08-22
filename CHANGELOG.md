@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-22
+
+### Added
+- **HTML cloud conversion** (`--html` / `--html-dir` flags): upload HTML files to
+  mineru.net with `model_version="MinerU-HTML"`. The `_model_version()` helper
+  selects the correct model automatically based on file extension. Full pipeline:
+  upload → poll → download ZIP → extract → auto-clean (block-level + channel
+  watermark).
+- **`dtmd convert --mode cloud --html <path>`**: convert a single HTML file.
+- **`dtmd convert --mode cloud --html-dir <dir>`**: recursively convert all
+  `.html` / `.htm` files in a directory.
+- **`_model_version(filepath)`**: returns `"MinerU-HTML"` for `.html`/`.htm`
+  files, `"vlm"` for all other types — replaces two hardcoded `"vlm"` strings.
+
+### Fixed
+- **`--dry-run` propagation**: the `--dry-run` flag consumed by the CLI parser
+  is now correctly forwarded to `cloud.main()` (historically broken for all
+  cloud subcommands).
+
+### Tests
+- `tests/test_html_cloud.py` (22 test cases): coverage of `_model_version()`
+  extension detection, `_html_mode()` dry-run path resolution, CLI argument
+  parsing, edge cases (file not found, empty dir, dedup, non-HTML filtering).
+- Full end-to-end manual verification: HTML → MinerU cloud → clean Markdown.
+- 29 existing tests pass with zero regressions.
+
 ## [0.5.0] - 2026-08-21
 
 ### Added

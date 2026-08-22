@@ -39,6 +39,12 @@ MAX_WAIT = 7200  # 轮询最长 2 小时
 FORCE = False  # 强制重转：--force 时绕过"已转跳过"并覆盖旧输出（模块级，供 save_zip 读）
 
 
+def _model_version(filepath):
+    """根据文件扩展名选择 model_version（HTML→MinerU-HTML，其他→vlm）"""
+    ext = os.path.splitext(filepath)[1].lower()
+    return "MinerU-HTML" if ext in (".html", ".htm") else "vlm"
+
+
 def err(msg):
     print(f"[错误] {msg}", file=sys.stderr)
 
@@ -90,6 +96,7 @@ def main(argv=None):
     # --ocr 保留为显式确认（默认已开）；复杂文档本就强制 OCR
     ocr = True
     complex_mode = "--complex" in args
+    html_mode = "--html" in args
     limit = None
     # 默认预算：充分利用每日 5000 文件上限（接受超额走慢速队列）。
     # 前 1000 页优先队列快跑，超额部分优先级降低但仍会解析（不丢）。
@@ -116,6 +123,10 @@ def main(argv=None):
         if _a.isdigit():
             day = int(_a); break
         _i += 1
+
+    # HTML 模式优先路由：不需要 plan.json，直接处理（由 cli.py --html/--html-dir 透传调用）
+    if html_mode:
+        return _html_mode(args, dry, ocr, limit, budget)
 
     plan = json.load(open(PLAN, encoding="utf-8"))
 
@@ -171,8 +182,8 @@ def main(argv=None):
         for g in range(0, len(tasks), 50):
             group = tasks[g:g + 50]
             payload = {"files": [{"name": os.path.basename(t["tmp"]), "data_id": t["data_id"],
-                                  "is_ocr": ocr, "model_version": "vlm"} for t in group],
-                       "model_version": "vlm"}
+                                  "is_ocr": ocr, "model_version": _model_version(t["tmp"])} for t in group],
+                       "model_version": _model_version(group[0]["tmp"])}
             r = http("POST", f"{API}/file-urls/batch", headers=h, json=payload, timeout=60)
             rj = r.json()
             if rj.get("code") != 0:
@@ -251,8 +262,8 @@ def main(argv=None):
     for g in range(0, len(tasks), 50):
         group = tasks[g:g + 50]
         payload = {"files": [{"name": os.path.basename(t["tmp"]), "data_id": t["data_id"],
-                              "is_ocr": ocr, "model_version": "vlm"} for t in group],
-                   "model_version": "vlm"}
+                              "is_ocr": ocr, "model_version": _model_version(t["tmp"])} for t in group],
+                   "model_version": _model_version(group[0]["tmp"])}
         r = http("POST", f"{API}/file-urls/batch", headers=h, json=payload, timeout=60)
         rj = r.json()
         if rj.get("code") != 0:
@@ -364,6 +375,85 @@ def cleanup():
         print("[清理] 切片临时文件已清除")
     except OSError:
         pass
+
+
+def _html_mode(args, dry, ocr, limit, budget):
+    """处理 --html 模式：上传 HTML 文件到云端转写（由 cli.py --html/--html-dir 透传调用）。
+
+    流程: 收集文件路径 → 构造伪块 → 上传 → 轮询 → 下载解压 → 自动清洗
+    特点: 不切片（HTML 整文件上传）、model_version 自动选 MinerU-HTML、输出目录同 PDF 风格
+    """
+    # 收集所有 HTML 文件路径（--html 后的裸参数，支持目录递归展开）
+    idx = args.index("--html")
+    html_paths = []
+    for a in args[idx + 1:]:
+        if a.startswith("-"):
+            break
+        if os.path.isdir(a):
+            for root, _dirs, files in os.walk(a):
+                for f in files:
+                    if f.lower().endswith((".html", ".htm")):
+                        html_paths.append(os.path.join(root, f))
+        else:
+            html_paths.append(a)
+    if not html_paths:
+        err("未找到 HTML 文件（--html 后指定文件路径或目录）"); return 1
+
+    # 构造伪块（每个 HTML 文件当作单块）
+    blocks = []
+    for p in html_paths:
+        if not os.path.exists(p):
+            print(f"  跳过(文件不存在): {p}")
+            continue
+        blocks.append({"file": p, "kind": "HTML", "start": 1, "end": 1, "pages": 1})
+    if not blocks:
+        print("[HTML] 无有效 HTML 文件"); return 1
+    if limit:
+        blocks = blocks[:limit]
+
+    print(f"[HTML] {len(blocks)} 个文件" + ("（DRY-RUN 预览）" if dry else ""))
+
+    # 文件计数（每个文件单块，不分子目录）
+    file_counts = {b["file"]: 1 for b in blocks}
+
+    # 生成上传任务清单（跳过已完成）
+    tasks = []
+    for i, b in enumerate(blocks):
+        out_dir = compute_out_dir(b, file_counts)
+        if not FORCE and is_done(out_dir):
+            print(f"  跳过(已完成): {os.path.basename(b['file'])}")
+            continue
+        tasks.append({"tmp": b["file"], "out": out_dir, "data_id": f"html{i}"})
+    if not tasks:
+        print("[HTML] 全部已完成"); return 0
+    print(f"[待传] {len(tasks)} 个文件")
+
+    if dry:
+        for t in tasks:
+            print(f"  → {os.path.basename(t['tmp'])}")
+            print(f"    输出: {t['out']}")
+        return 0
+
+    h = headers()
+    for g in range(0, len(tasks), 50):
+        group = tasks[g:g + 50]
+        payload = {"files": [{"name": os.path.basename(t["tmp"]), "data_id": t["data_id"],
+                              "model_version": _model_version(t["tmp"])} for t in group],
+                   "model_version": _model_version(group[0]["tmp"])}
+        r = http("POST", f"{API}/file-urls/batch", headers=h, json=payload, timeout=60)
+        rj = r.json()
+        if rj.get("code") != 0:
+            err(f"申请上传链接失败: {rj.get('msg')}"); return 1
+        batch_id = rj["data"]["batch_id"]
+        urls = rj["data"]["file_urls"]
+        for t, u in zip(group, urls):
+            pr = upload_file(t["tmp"], u)
+            print(f"  上传 {os.path.basename(t['tmp'])}: HTTP {pr.status_code}")
+        print(f"[已提交 batch {batch_id}] {len(group)} 文件，轮询中...")
+        poll_and_save(batch_id, group, h)
+    cleanup()
+    print(f"[HTML] 全部完成 ✅")
+    return 0
 
 
 if __name__ == "__main__":

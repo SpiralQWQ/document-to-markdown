@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>测试网页</title></head>
+<body>
+<h1>网页转 Markdown 测试</h1>
+<p>这是一段测试正文，用于演示 MinerU 把 HTML 转成干净 Markdown 的效果。</p>
+
+<h2>功能列表</h2>
+<ul>
+  <li>标题层级保留</li>
+  <li>列表结构保留</li>
+  <li>表格转为管道表格</li>
+  <li>代码块保留</li>
+  <li>自动清洗噪音</li>
+</ul>
+
+<h2>数据对比</h2>
+<table>
+  <tr><th>方式</th><th>耗时</th><th>质量</th></tr>
+  <tr><td>手动复制</td><td>5分钟/篇</td><td>一般</td></tr>
+  <tr><td>MinerU 云端</td><td>20秒/篇</td><td>高</td></tr>
+</table>
+
+<h2>代码示例</h2>
+<pre><code>def convert_html_to_md(html_path):
+    """上传 HTML 到 MinerU 云端转写"""
+    result = cloud.upload(html_path)
+    return result.full_md
+</code></pre>
+
+<p>欢迎加入QQ群123456免费领资料</p>
+</body>
+</html>

@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "document-to-markdown"
-version = "0.5.0"
-description = "Convert PDF/Word/PPT documents to AI-ready Markdown with forced OCR, quality gates, a three-layer QA system and automatic cleaning"
+version = "0.5.1"
+description = "Convert PDF/Word/PPT/HTML documents to AI-ready Markdown via MinerU (cloud API + local pipeline), with block-level noise cleaning, channel watermark removal, and a three-layer QA system"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
 authors = [
-    { name = "SpiralQWQ" },
+    { name = "SpiralQWQ", url = "https://github.com/SpiralQWQ" },
 ]
 keywords = ["pdf", "markdown", "ocr", "mineru", "document-conversion", "rag", "llm"]
 classifiers = [
@@ -42,7 +42,7 @@ vision = ["requests"]
 Homepage = "https://github.com/SpiralQWQ/document-to-markdown"
 Repository = "https://github.com/SpiralQWQ/document-to-markdown"
 Documentation = "https://github.com/SpiralQWQ/document-to-markdown#readme"
-Changelog = "https://github.com/SpiralQWQ/document-to-markdown/blob/master/CHANGELOG.md"
+Changelog = "https://github.com/SpiralQWQ/document-to-markdown/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

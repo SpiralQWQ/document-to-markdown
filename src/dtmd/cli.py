@@ -243,6 +243,30 @@ def cmd_convert(args):
         extra += ["--limit", str(args.limit)]
     if args.max is not None and "--max" not in extra:
         extra += ["--max", str(args.max)]
+    # HTML 模式：收集文件路径，构造 --html 透传 cloud.py 的 _html_mode()
+    if args.html or args.html_dir:
+        html_paths = []
+        if args.html:
+            html_paths.append(args.html)
+        if args.html_dir:
+            if not os.path.isdir(args.html_dir):
+                print(f"[错误] --html-dir 目录不存在: {args.html_dir}")
+                return 1
+            for root, _dirs, files in os.walk(args.html_dir):
+                for f in files:
+                    if f.lower().endswith((".html", ".htm")):
+                        html_paths.append(os.path.join(root, f))
+        if not html_paths:
+            print("[错误] 未找到 HTML 文件")
+            return 1
+        # 去重（--html 和 --html-dir 可能重叠）并转为绝对路径
+        html_paths = sorted(set(os.path.abspath(p) for p in html_paths))
+        # 透传 --dry-run（被主解析器消费，但 cloud.py 的 _html_mode 需要它）
+        extra = ["--html"] + html_paths
+        if args.dry_run:
+            extra += ["--dry-run"]
+        # 透传给 cloud.py：--html 后跟所有文件路径
+        return cloud.main(extra)
     return main_fn(extra)
 
 
@@ -302,6 +326,10 @@ def build_parser():
                     help="clean 用：递归查找根目录下所有 *_mineru/ 转写目录")
     ap.add_argument("--dry-run", action="store_true",
                     help="clean 用：预演模式，只统计删除行数不写回 full.md")
+    ap.add_argument("--html", default=None,
+                    help="convert 用：上传单个 HTML 文件到云端转写（--mode cloud 时有效）")
+    ap.add_argument("--html-dir", default=None,
+                    help="convert 用：上传目录下所有 HTML 文件到云端转写（--mode cloud 时有效）")
     return ap
 
 
