@@ -307,47 +307,69 @@ def cmd_plan(args):
     dry_run = args.dry_run
     budget = args.budget or 5000
 
-    # 扫描所有 PDF
-    all_pdfs = []
-    for target in targets:
-        if os.path.isfile(target) and target.lower().endswith(".pdf"):
-            all_pdfs.append(target)
-        elif os.path.isdir(target):
-            for root, _dirs, files in os.walk(target):
-                for f in files:
-                    if f.lower().endswith(".pdf"):
-                        all_pdfs.append(os.path.join(root, f))
-        else:
-            print(f"  [跳过] 非 PDF 或不存在: {target}")
+    # 支持的文档扩展名（PDF 智能切片；Office 整文件上传）
+    DOC_EXTS = (".pdf", ".doc", ".docx", ".ppt", ".pptx")
 
-    if not all_pdfs:
-        print("[plan] 未找到 PDF 文件")
+    # 扫描所有文档（记录每个文件相对扫描根 target 的目录，用于镜像输出）
+    all_docs = []
+    for target in targets:
+        if os.path.isfile(target) and target.lower().endswith(DOC_EXTS):
+            all_docs.append((target, os.path.dirname(os.path.abspath(target))))
+        elif os.path.isdir(target):
+            target_root = os.path.abspath(target)
+            for root, _dirs, files in os.walk(target):
+                # 跳过 _mineru/ 输出目录（含 _origin.pdf 等中间产物）
+                if root.endswith("_mineru") or "_mineru/" in root or "_mineru\\" in root:
+                    continue
+                for f in files:
+                    if f.lower().endswith(DOC_EXTS):
+                        all_docs.append((os.path.join(root, f), target_root))
+        else:
+            print(f"  [跳过] 非文档或不存在: {target}")
+
+    if not all_docs:
+        print("[plan] 未找到文档文件（pdf/doc/docx/ppt/pptx）")
         return 1
 
-    all_pdfs.sort()
-    print(f"[plan] 扫描到 {len(all_pdfs)} 个 PDF，正在分析页数 + 目录结构...")
+    all_docs.sort()
+    n_pdf = sum(1 for fp, _ in all_docs if fp.lower().endswith(".pdf"))
+    n_office = len(all_docs) - n_pdf
+    print(f"[plan] 扫描到 {len(all_docs)} 个文档（PDF {n_pdf} + Office {n_office}），正在分析页数 + 目录结构...")
 
     all_blocks = []
     total_pages = 0
 
-    for fp in all_pdfs:
-        try:
-            doc = fitz.open(fp)
-            pages = doc.page_count
-            doc.close()
-        except Exception:
-            print(f"  [跳过] 无法读取: {os.path.basename(fp)}")
-            continue
-
-        # 所有文件统一处理：超过 200 页的智能切片，否则单块
-        if pages > MAX_PAGES_PER_FILE:
-            blocks = smart_slice(fp, pages, MAX_PAGES_PER_FILE)
-            print(f"  {os.path.basename(fp)}: {pages}页 → 切 {len(blocks)} 块")
+    for fp, target_root in all_docs:
+        ext = os.path.splitext(fp)[1].lower()
+        # 相对扫描根的目录（镜像输出用；单文件 target 时为空）
+        src_rel_dir = os.path.dirname(os.path.relpath(os.path.abspath(fp), target_root))
+        src_rel_dir = "" if src_rel_dir == "." else src_rel_dir
+        if ext == ".pdf":
+            try:
+                doc = fitz.open(fp)
+                pages = doc.page_count
+                doc.close()
+            except Exception:
+                print(f"  [跳过] 无法读取: {os.path.basename(fp)}")
+                continue
+            # 超过 200 页的 PDF 智能切片，否则单块
+            if pages > MAX_PAGES_PER_FILE:
+                blocks = smart_slice(fp, pages, MAX_PAGES_PER_FILE)
+                print(f"  {os.path.basename(fp)}: {pages}页 → 切 {len(blocks)} 块")
+            else:
+                blocks = [{"file": fp, "kind": "PDF", "start": 1, "end": pages, "pages": pages}]
+                print(f"  {os.path.basename(fp)}: {pages}页 → 1 块")
+            total_pages += pages
         else:
-            blocks = [{"file": fp, "kind": "PDF", "start": 1, "end": pages, "pages": pages}]
-            print(f"  {os.path.basename(fp)}: {pages}页 → 1 块")
+            # Office 文件不切片，整文件上传（kind 按扩展名）
+            kind = "DOC" if ext in (".doc", ".docx") else "PPT"
+            blocks = [{"file": fp, "kind": kind, "start": 1, "end": 1, "pages": 1}]
+            print(f"  {os.path.basename(fp)}: Office → 1 块（{kind}）")
+            total_pages += 1
 
-        total_pages += pages
+        # 写入 src_rel_dir（compute_out_dir 镜像输出用）
+        for b in blocks:
+            b["src_rel_dir"] = src_rel_dir
         all_blocks.extend(blocks)
 
     # 按天分组（每天 ≤ budget 页）
@@ -365,6 +387,10 @@ def cmd_plan(args):
         days.append({"day": len(days) + 1, "blocks": day_blocks})
 
     plan = {"days_normal": days}
+    # 兼容质检系统：质检系统读取 pending_normal/pending_complex，
+    # 把 days_normal 里所有块也写入 pending_normal（质检用）
+    all_blocks_in_days = [b for d in days for b in d["blocks"]]
+    plan["pending_normal"] = all_blocks_in_days
 
     block_count = sum(len(d["blocks"]) for d in days)
     block_pages = sum(sum(b["pages"] for b in d["blocks"]) for d in days)

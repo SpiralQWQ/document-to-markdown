@@ -16,6 +16,8 @@
 环境变量:
   DTM_ROOT → 仓库根 | DTM_TOOLS → 工具目录
   DTM_MINERU_ENV, DTM_PANDOC, DTM_PIX2TEXT_ENV, DTM_CLEANER_PATH, DTM_BRIDGE_DIR
+  DTM_OUTPUT_ROOT → 转写输出根目录（非空时输出到 {OUTPUT_ROOT}/<相对路径>/xxx_mineru，
+                    空时默认输出到源文件旁，保持旧行为）
 """
 import os
 
@@ -45,6 +47,8 @@ MINERU_ENV = os.environ.get("DTM_MINERU_ENV", "")
 BRIDGE_DIR = os.environ.get("DTM_BRIDGE_DIR", "")
 PIX2TEXT_ENV = os.environ.get("DTM_PIX2TEXT_ENV", "")
 CLEANER_PATH = os.environ.get("DTM_CLEANER_PATH", "")
+# 转写输出根目录：非空时输出到 {OUTPUT_ROOT}/<src_rel_dir>/xxx_mineru（镜像源结构，不污染源目录）
+OUTPUT_ROOT = os.environ.get("DTM_OUTPUT_ROOT", "").strip()
 # GLM 代理端口（单一事实源：local.py / glm_mineru_proxy.py / watchdog 统一读取）
 try:
     PROXY_PORT = int(os.environ.get("DTM_PROXY_PORT", "8031"))

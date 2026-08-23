@@ -248,11 +248,8 @@ def main(argv=None):
             print(f"  [警告] {os.path.basename(b['file'])} p{b['start']}-{b['end']} "
                   f"共 {b['pages']} 页，超过 {MAX_PAGES_PER_FILE} 页上限，API 将拒绝！")
             continue
-        orig_dir = os.path.dirname(b["file"])
-        base = safe(os.path.splitext(os.path.basename(b["file"]))[0])
-        out_root = os.path.join(orig_dir, base + "_mineru")
-        multi = file_counts.get(b["file"], 0) > 1
-        out_dir = os.path.join(out_root, f"p{b['start']}-{b['end']}") if multi else out_root
+        # 统一走 compute_out_dir（支持 DTM_OUTPUT_ROOT 镜像输出）
+        out_dir = compute_out_dir(b, file_counts)
         if not FORCE and already_done(out_dir):
             print(f"  跳过(已完成): {os.path.basename(b['file'])} p{b['start']}-{b['end']}")
             continue

@@ -49,10 +49,20 @@ def is_done(out_dir):
 
 
 def compute_out_dir(block, file_counts):
-    """计算块的输出目录（单块→根目录，多块→p{start}-{end} 子目录）。"""
-    orig_dir = os.path.dirname(block["file"])
+    """计算块的输出目录（单块→根目录，多块→p{start}-{end} 子目录）。
+
+    默认输出到源文件旁 {源目录}/{basename}_mineru。
+    若配置 DTM_OUTPUT_ROOT：输出到 {OUTPUT_ROOT}/{src_rel_dir}/{basename}_mineru
+    （镜像源目录结构，不污染源目录；src_rel_dir 由 plan 生成时写入块）。
+    """
+    from dtmd import config as _cfg
     base = safe(os.path.splitext(os.path.basename(block["file"]))[0])
-    out_root = os.path.join(orig_dir, base + "_mineru")
+    if _cfg.OUTPUT_ROOT:
+        rel_dir = block.get("src_rel_dir", "")
+        out_root = os.path.join(_cfg.OUTPUT_ROOT, rel_dir, base + "_mineru")
+    else:
+        orig_dir = os.path.dirname(block["file"])
+        out_root = os.path.join(orig_dir, base + "_mineru")
     multi = file_counts.get(block["file"], 1) > 1
     return os.path.join(out_root, f"p{block['start']}-{block['end']}") if multi else out_root
 
