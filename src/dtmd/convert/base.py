@@ -162,13 +162,9 @@ def _detect_heading_pages(doc, max_pages):
     heading_pages = set()
     total = doc.page_count
 
-    # 策略性扫描：前 30 页 + 每段窗口边界 ±10 页
-    scan_pages = set(range(min(30, total)))
-    for boundary in range(max_pages, total, max_pages):
-        for offset in range(-10, 11):
-            p = boundary + offset
-            if 0 <= p < total:
-                scan_pages.add(p)
+    # 全量扫描：真实章节标题散布全书各处，只扫边界会漏掉中间标题 → 退化成硬切（内容断连）。
+    # 性能权衡：plan 阶段一次性，每页 get_text 约 5-20ms，数百页可接受。
+    scan_pages = range(total)
 
     for page_num in sorted(scan_pages):
         page = doc[page_num]
@@ -183,12 +179,15 @@ def _detect_heading_pages(doc, max_pages):
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
                     sizes.append(span["size"])
-        if not sizes:
+        if len(sizes) < 3:  # 字符太少（如纯标题页）无法算基线 → 跳过
             continue
-        avg = sum(sizes) / len(sizes)
-        # 大字号：> 20pt 且 > 平均的 1.5 倍
+        # 基线用中位数：比均值抗干扰（少数大字号不会拉高基线）
+        sizes_sorted = sorted(sizes)
+        mid = len(sizes_sorted) // 2
+        baseline = sizes_sorted[mid]
+        # 大字号：> 20pt 且 > 基线（中位数）的 1.5 倍
         max_size = max(sizes)
-        if max_size > 20 and max_size > avg * 1.5:
+        if max_size > 20 and max_size > baseline * 1.5:
             heading_pages.add(page_num + 1)  # 转为 1-indexed
 
     return sorted(heading_pages)

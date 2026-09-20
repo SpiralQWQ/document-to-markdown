@@ -352,6 +352,9 @@ def cmd_plan(args):
             except Exception:
                 print(f"  [跳过] 无法读取: {os.path.basename(fp)}")
                 continue
+            if pages <= 0:  # 损坏/空 PDF：能打开但 0 页 → 跳过
+                print(f"  [跳过] 0 页(损坏或空): {os.path.basename(fp)}")
+                continue
             # 超过 200 页的 PDF 智能切片，否则单块
             if pages > MAX_PAGES_PER_FILE:
                 blocks = smart_slice(fp, pages, MAX_PAGES_PER_FILE)
@@ -395,6 +398,10 @@ def cmd_plan(args):
     block_count = sum(len(d["blocks"]) for d in days)
     block_pages = sum(sum(b["pages"] for b in d["blocks"]) for d in days)
     print(f"\n[plan] 统计: {len(days)} 天, {block_count} 块, {block_pages} 页")
+    if block_count == 0:
+        # 扫描到了文件但全部无法读取（损坏/0页）→ 明确失败，不生成空 plan
+        print("[plan] 错误: 所有文档都无法读取（损坏或空页），未生成 plan")
+        return 1
 
     if dry_run:
         print(f"[plan] DRY-RUN 完成，未写文件")
@@ -465,7 +472,12 @@ def cmd_merge(args):
 
     mode = "预演(不写回)" if args.dry_run else "完成"
     print(f"[merge] {mode}: 合并 {ok_n} | 跳过 {skip_n} | 失败 {fail_n}")
-    return 0 if fail_n == 0 else 1
+    # 退出码：有失败=1；有合并成功=0；全部跳过/无目录=1（无事发生也提示用户）
+    if fail_n > 0:
+        return 1
+    if ok_n > 0:
+        return 0
+    return 1
 
 
 COMMANDS = {
