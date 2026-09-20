@@ -286,6 +286,34 @@ python -m dtmd convert --mode cloud 1
 # → /path/to/输出根/docs/xxx_mineru/full.md      （源目录零污染）
 ```
 
+### 插图融合（OCR + GLM → 内嵌进 full.md）
+
+MinerU 把纯插图（封面/图表截图/界面图）留在 images/ 只留死引用——AI 读 `full.md`
+看不到图里的内容。`dtmd enrich` 对每张图做本地 OCR（免费）+ 可选 GLM 视觉理解，
+生成 `images_notes/<同名>.md`，再把笔记内容**内嵌**进 full.md。交互向导先报代价
+再询问（默认 = 不执行）；转写完成后也会自动询问。
+
+```bash
+python -m dtmd enrich ./某书_mineru            # 先询问（回车 = 跳过）
+python -m dtmd enrich ./资料库 --recursive     # 递归处理所有 _mineru/
+python -m dtmd enrich ./某书_mineru --yes      # 跳过询问直接执行
+python -m dtmd enrich ./某书_mineru --dry-run  # 只统计图片数
+```
+
+### 清理（显式，用户确认）
+
+审核完输出后，可清理中间产物（images/、images_notes/、中间 json/pdf）——
+`full.md` 永远保留：
+
+```bash
+python -m dtmd cleanup ./某书_mineru           # 列分类清单 → 确认（默认 = 取消）
+python -m dtmd cleanup ./资料库 --recursive    # 递归处理
+python -m dtmd cleanup ./某书_mineru --yes     # 跳过确认
+```
+
+> json/pdf 按**文件**删除（绝不按目录），full.md 不会被连带；full.md 缺失/为空时
+> 拒绝删 images_notes/（保护融合成果）。
+
 ### 块级清洗（内置，默认自动）
 
 转换后会**自动清洗**产物：页眉/页脚、页码、重复的水印行（书名页眉、章节页眉、

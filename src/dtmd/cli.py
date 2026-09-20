@@ -28,6 +28,8 @@ from dtmd.quality import rework as rework_mod
 from dtmd.quality import report
 from dtmd import config as _paths
 
+NOTES_SKIP = "images_notes"  # enrich 产物目录（遍历跳过）
+
 
 def cmd_list(args):
     """列出块清单与完成状态（Task-01/02 最小验证点）"""
@@ -480,10 +482,102 @@ def cmd_merge(args):
     return 1
 
 
+def cmd_enrich(args):
+    """enrich 命令：插图融合（OCR + GLM → images_notes/ → 内嵌 full.md）。
+
+    用法:
+      python -m dtmd enrich <目录>              # 交互询问后执行（默认回车=不执行）
+      python -m dtmd enrich <目录> --recursive  # 递归找所有 _mineru/ 批量处理
+      python -m dtmd enrich <目录> --yes        # 跳过询问直接执行
+      python -m dtmd enrich <目录> --dry-run    # 只统计图片数，不执行
+    """
+    from dtmd.convert.enrich import count_images
+    from dtmd.convert.enrich_wizard import run_enrich_flow
+
+    extra = list(args._extra or [])
+    targets = [a for a in extra if not a.startswith("-")]
+    if not targets:
+        print("[enrich] 用法: python -m dtmd enrich <目录> [--recursive] [--yes] [--dry-run]")
+        return 1
+
+    dirs = []
+    for t in targets:
+        if args.recursive and os.path.isdir(t):
+            for root, ds, _fs in os.walk(t):
+                # 只收 _mineru/ 目录；跳过 images_notes/ 产物树
+                ds[:] = [d for d in ds if d != NOTES_SKIP]
+                if root.endswith("_mineru"):
+                    dirs.append(root)
+        elif os.path.isdir(t):
+            dirs.append(t)
+        else:
+            print(f"  [跳过] 目录不存在: {t}")
+
+    dirs = sorted(set(dirs))
+    if not dirs:
+        print("[enrich] 未找到目录")
+        return 1
+
+    total = sum(count_images(d)["count"] for d in dirs)
+    print(f"[enrich] {len(dirs)} 个目录 / 共 {total} 张插图")
+    if args.dry_run:
+        for d in dirs:
+            print(f"  {d}: {count_images(d)['count']} 张")
+        print("[enrich] DRY-RUN 完成，未执行")
+        return 0
+    if not total:
+        print("[enrich] 没有插图，无需融合")
+        return 0
+    run_enrich_flow(dirs, kind="batch" if len(dirs) > 1 else "single",
+                    assume_yes=args.yes)
+    return 0
+
+
+def cmd_cleanup(args):
+    """cleanup 命令：清理中间产物（列清单 → 确认 → 删；full.md 永远保留）。
+
+    用法:
+      python -m dtmd cleanup <目录>              # 交互确认（默认=取消）
+      python -m dtmd cleanup <目录> --recursive  # 递归处理所有 _mineru/
+      python -m dtmd cleanup <目录> --yes        # 跳过确认全删
+    """
+    from dtmd.convert.enrich_wizard import run_cleanup_flow
+
+    extra = list(args._extra or [])
+    targets = [a for a in extra if not a.startswith("-")]
+    if not targets:
+        print("[cleanup] 用法: python -m dtmd cleanup <目录> [--recursive] [--yes]")
+        return 1
+
+    dirs = []
+    for t in targets:
+        if args.recursive and os.path.isdir(t):
+            for root, _ds, _fs in os.walk(t):
+                if root.endswith("_mineru"):
+                    dirs.append(root)
+        elif os.path.isdir(t):
+            dirs.append(t)
+        else:
+            print(f"  [跳过] 目录不存在: {t}")
+
+    dirs = sorted(set(dirs))
+    if not dirs:
+        print("[cleanup] 未找到目录")
+        return 1
+
+    rc = 0
+    for d in dirs:
+        if run_cleanup_flow(d, assume_yes=args.yes) != 0:
+            rc = 1  # 有取消/无产物 → 提示码，但不算错误
+    return rc
+
+
 COMMANDS = {
     "list": (cmd_list, "列出块清单与完成状态"),
     "plan": (cmd_plan, "扫描目录 → 智能切片 → 生成 plan.json"),
     "merge": (cmd_merge, "合并切片输出（p{start}-{end}/full.md → 完整 full.md）"),
+    "enrich": (cmd_enrich, "插图融合（OCR+GLM 理解插图 → 内容内嵌 full.md）"),
+    "cleanup": (cmd_cleanup, "清理中间产物（列清单确认后删；full.md 保留）"),
     "l1": (cmd_l1, "L1 自动检查（完整性/页数/md_lint/图片引用）"),
     "l2": (cmd_l2, "L2 表格复核（camelot）"),
     "l3": (cmd_l3, "L3 复审计划（选目标+选页+成本预估）"),
@@ -544,6 +638,8 @@ def build_parser():
                     help="convert 用：上传单个 HTML 文件到云端转写（--mode cloud 时有效）")
     ap.add_argument("--html-dir", default=None,
                     help="convert 用：上传目录下所有 HTML 文件到云端转写（--mode cloud 时有效）")
+    ap.add_argument("--yes", action="store_true",
+                    help="enrich/cleanup 用：跳过交互确认直接执行")
     return ap
 
 

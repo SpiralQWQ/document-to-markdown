@@ -294,6 +294,35 @@ python -m dtmd convert --mode cloud 1
 # → /path/to/output-root/docs/xxx_mineru/full.md  (source tree untouched)
 ```
 
+### Image enrichment (OCR + GLM → embedded into full.md)
+
+MinerU keeps pure illustrations (covers, chart screenshots, UI figures) as dead
+references — the AI reading `full.md` cannot see their content. `dtmd enrich` reads
+every image with local OCR (free) + optional GLM vision, writes `images_notes/<stem>.md`,
+then embeds the note text inline into `full.md`. An interactive wizard asks first with
+the real cost shown (default = No); conversion also asks at the end.
+
+```bash
+python -m dtmd enrich ./book_mineru            # asks first (Enter = skip)
+python -m dtmd enrich ./library --recursive    # every _mineru/ under a root
+python -m dtmd enrich ./book_mineru --yes      # skip the prompt
+python -m dtmd enrich ./book_mineru --dry-run  # count images only
+```
+
+### Cleanup (explicit, user-confirmed)
+
+After you have reviewed the output, remove intermediate artifacts (`images/`,
+`images_notes/`, mid json/pdf) — `full.md` is always kept:
+
+```bash
+python -m dtmd cleanup ./book_mineru           # list categories → confirm (default = cancel)
+python -m dtmd cleanup ./library --recursive   # every _mineru/
+python -m dtmd cleanup ./book_mineru --yes     # skip confirmation
+```
+
+> json/pdf are deleted per-file (never by directory) so `full.md` cannot be caught in
+> the sweep; `images_notes/` is protected while `full.md` is missing or empty.
+
 ### Block-level cleaning (built-in, automatic)
 
 Conversion now cleans output **automatically**: page headers/footers, page numbers and

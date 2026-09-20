@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-23
+
+### Added
+- **Image enrichment** (`dtmd.convert.enrich`): MinerU leaves pure illustrations
+  (covers/chart screenshots/UI figures) as dead references in `full.md` — the AI
+  could not read their content. Now each image can be processed with local OCR
+  (RapidOCR, free) + GLM vision understanding (`glm-4.6v-flashx`, rate-limit retry
+  capped at 5) into `images_notes/<stem>.md`, then embedded inline into `full.md`
+  (`## 插图笔记：<stem>`) — a self-contained Markdown the AI reads end-to-end.
+  Resume-safe (existing notes skipped); GLM-less environments degrade to OCR-only.
+- **Interactive wizard** (`dtmd.convert.enrich_wizard`): product-manager style
+  prompts with defaults ("what it does / what wrong choice costs / press Enter for
+  default"). Non-interactive (EOF) environments take the default instead of hanging.
+  Asks after conversion with real cost shown ("N books / M images"); default = No.
+- **`dtmd enrich` CLI**: `--recursive` batch / `--yes` skip prompt / `--dry-run`
+  count only.
+- **`dtmd cleanup` CLI**: lists removable artifacts by category (images / notes /
+  json / pdf / temp zip with sizes) → confirm → delete. `full.md` always kept.
+- **Post-conversion hook**: cloud conversion ends by asking whether to enrich
+  images (default No; "skip asking" remembered for the session).
+
+### Fixed
+- cleanup deleted json/pdf via `rmtree` of the containing directory — could take
+  `full.md` down with it. Now json/pdf/temp files are removed per-file; only
+  `images/` / `images_notes/` are removed as directories.
+- cleanup refuses to remove `images_notes/` when `full.md` is missing/empty
+  (would destroy the embedded result).
+
+### Tests
+- `tests/test_enrich.py` (25 cases): breakpoint skip, GLM degrade, empty images,
+  dir stats/resume, embed replace/missing-keeps-ref/dry-run/sliced cross-find,
+  wizard default/EOF/invalid-retry/zero-images-no-prompt, cleanup guardrails,
+  partial vs full delete, CLI registration. Real RapidOCR smoke verified.
+- 150 tests green.
+
 ## [0.5.2] - 2026-08-22
 
 ### Added

@@ -297,7 +297,28 @@ def main(argv=None):
 
     cleanup()
     print(f"[Day {day}] 全部完成 ✅")
+
+    # 转写收尾：插图融合询问钩子（面向用户，先统计再问；默认不执行）
+    _maybe_enrich_hook(tasks)
     return 0
+
+
+def _maybe_enrich_hook(tasks):
+    """转写完成后询问是否对插图做 OCR+GLM 融合。失败不阻塞主流程。
+
+    非交互环境（EOF）自动用默认（不执行）；用户选"跳过询问"后本次会话不再问。
+    """
+    try:
+        from dtmd.convert.enrich_wizard import run_enrich_flow, session_skip_enrich
+        out_dirs = sorted({t["out"] for t in tasks if os.path.isdir(t["out"])})
+        if not out_dirs:
+            return
+        kind = "batch" if len(out_dirs) > 1 else "single"
+        run_enrich_flow(out_dirs, kind=kind)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"    [enrich 跳过] {type(e).__name__}: {e}")
 
 
 def poll_and_save(batch_id, group, h):
