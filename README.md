@@ -233,6 +233,23 @@ export GLM_API_KEY="your_glm_api_key"
 
 ## Usage
 
+### Generate a plan (smart slicing)
+
+Scan a folder of documents and generate `plan.json` — PDFs over 200 pages are
+**smart-sliced at chapter boundaries** (TOC first, then font-size heading detection,
+then hard cut as last resort) so content never breaks mid-chapter. Word/PowerPoint
+files are queued whole.
+
+```bash
+python -m dtmd plan ./my-docs/                 # scan → smart slice → write _data/plan.json
+python -m dtmd plan ./my-docs/ --dry-run       # preview only, write nothing
+python -m dtmd plan ./my-docs/ --budget 3000   # daily page budget (default 5000)
+python -m dtmd plan ./my-docs/ --out other.json
+```
+
+> Big books (>200 pages) are sliced into `p{start}-{end}` blocks automatically; every
+> block stays within MinerU's 200-page-per-file limit.
+
 ### Local batch conversion
 
 ```bash
@@ -244,8 +261,37 @@ python -m dtmd convert --mode local --max 5         # convert at most 5 blocks
 ### Cloud conversion (MinerU API)
 
 ```bash
-python -m dtmd convert --mode cloud --complex --dry-run   # preview what would be uploaded
-python -m dtmd convert --mode cloud --complex             # upload & poll complex documents
+python -m dtmd convert --mode cloud 1 --dry-run      # preview Day 1 upload
+python -m dtmd convert --mode cloud 1                # upload & poll Day 1
+python -m dtmd convert --mode cloud --html doc.html  # single HTML file (MinerU-HTML model)
+python -m dtmd convert --mode cloud --html-dir pages # every .html/.htm in a folder
+```
+
+> Quotas: ~5000 files/day, 200 pages per file (sliced automatically), first 1000 pages
+> daily at highest priority (overflow is queued, never dropped). HTML has a separate quota.
+
+### Merge sliced output
+
+Multi-block books are split into `p{start}-{end}/` subdirectories. `dtmd merge` stitches
+them back into one complete `full.md` at the `_mineru/` root (slices are kept untouched):
+
+```bash
+python -m dtmd merge ./my-book_mineru          # merge one book
+python -m dtmd merge ./library --recursive     # merge every _mineru/ under a root
+python -m dtmd merge ./library --dry-run       # preview counts only
+```
+
+### Mirror output (isolate conversion output from source dirs)
+
+By default output lands next to each source file (`xxx_mineru/`). If the source tree must
+stay untouched (e.g. git repos, shared libraries), set `DTM_OUTPUT_ROOT` and output is
+**mirrored** to `{DTM_OUTPUT_ROOT}/{relative-path}/xxx_mineru/` instead:
+
+```bash
+export DTM_OUTPUT_ROOT="/path/to/output-root"   # empty/unset = beside source (default)
+python -m dtmd plan ./repos/docs/               # src_rel_dir recorded per block automatically
+python -m dtmd convert --mode cloud 1
+# → /path/to/output-root/docs/xxx_mineru/full.md  (source tree untouched)
 ```
 
 ### Block-level cleaning (built-in, automatic)

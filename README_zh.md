@@ -228,6 +228,21 @@ export GLM_API_KEY="your_glm_api_key"
 
 ## 用法
 
+### 生成计划（智能切片）
+
+扫描文档目录并生成 `plan.json`——超过 200 页的 PDF 会在**章节边界智能切片**
+（优先 TOC 目录，其次大字号标题检测，最后硬切兜底），保证内容不在章节中间断开。
+Word/PowerPoint 整文件入队。
+
+```bash
+python -m dtmd plan ./我的文档/                 # 扫描 → 智能切片 → 写 _data/plan.json
+python -m dtmd plan ./我的文档/ --dry-run       # 只预览，不写文件
+python -m dtmd plan ./我的文档/ --budget 3000   # 每日页数预算（默认 5000）
+python -m dtmd plan ./我的文档/ --out other.json
+```
+
+> 大书（>200 页）自动切成 `p{start}-{end}` 块，每块都符合 MinerU 单文件 200 页上限。
+
 ### 本地批量转换
 
 ```bash
@@ -239,8 +254,36 @@ python -m dtmd convert --mode local --max 5         # 最多转 5 块
 ### 云端转换（MinerU API）
 
 ```bash
-python -m dtmd convert --mode cloud --complex --dry-run   # 预览会上传什么
-python -m dtmd convert --mode cloud --complex             # 上传并轮询复杂文档
+python -m dtmd convert --mode cloud 1 --dry-run      # 预览 Day 1 上传内容
+python -m dtmd convert --mode cloud 1                # 上传并轮询 Day 1
+python -m dtmd convert --mode cloud --html doc.html  # 单个 HTML 文件（MinerU-HTML 模型）
+python -m dtmd convert --mode cloud --html-dir pages # 目录下所有 .html/.htm
+```
+
+> 限额：每日 ~5000 文件、单文件 200 页（自动切片）、每日前 1000 页最高优先级
+>（超额降级排队不封死）。HTML 有独立配额。
+
+### 合并切片输出
+
+多块大书会输出到 `p{start}-{end}/` 子目录。`dtmd merge` 把它们按页序拼回
+`_mineru/` 根目录的一篇完整 `full.md`（切片原样保留）：
+
+```bash
+python -m dtmd merge ./我的书_mineru            # 合并一本
+python -m dtmd merge ./资料库 --recursive       # 递归合并根下所有 _mineru/
+python -m dtmd merge ./资料库 --dry-run         # 只预览数量
+```
+
+### 镜像输出（隔离转写产物与源目录）
+
+默认输出在源文件旁（`xxx_mineru/`）。如果源目录不能动（git 仓库、共享资料库），
+设置 `DTM_OUTPUT_ROOT` 后输出**镜像**到 `{DTM_OUTPUT_ROOT}/{相对路径}/xxx_mineru/`：
+
+```bash
+export DTM_OUTPUT_ROOT="/path/to/输出根"        # 空/未设置 = 默认输出在源旁
+python -m dtmd plan ./repos/docs/               # 每块自动记录 src_rel_dir
+python -m dtmd convert --mode cloud 1
+# → /path/to/输出根/docs/xxx_mineru/full.md      （源目录零污染）
 ```
 
 ### 块级清洗（内置，默认自动）
