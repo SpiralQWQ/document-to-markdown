@@ -6,6 +6,70 @@
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-23
+
+### 新增
+- **插图融合**（`dtmd.convert.enrich`）：MinerU 转写时纯插图（封面/图表截图/界面图）
+  只在 full.md 里留死引用——AI 读不到图里的内容。现在可对每张图做本地 OCR（RapidOCR，
+  免费）+ GLM 视觉理解（`glm-4.6v-flashx`，限流重试上限 5 次）生成 `images_notes/<同名>.md`，
+  再把笔记内容**内嵌**进 full.md（`## 插图笔记：<同名>`）——产出自包含 Markdown，
+  AI 从头读到尾无需跳链接。断点续跑（已有笔记跳过）；未配 GLM 自动降级纯 OCR。
+- **交互向导**（`dtmd.convert.enrich_wizard`）：产品经理风格提问（"干嘛的/选错代价/回车默认"）。
+  非交互环境（EOF）自动取默认不挂死。转写后自动询问并显示真实代价（"N 本书 / M 张插图"），
+  默认 = 不执行。
+- **`dtmd enrich` CLI**：`--recursive` 批量 / `--yes` 跳过询问 / `--dry-run` 只统计。
+- **`dtmd cleanup` CLI**：按类列出可清理产物（images / images_notes / json / pdf / 临时 zip
+  含数量与大小）→ 确认 → 删除。`full.md` 永远保留。
+- **转写收尾钩子**：云端转写完成后询问是否融合插图（默认否；选"跳过询问"本次会话不再问）。
+
+### 修复
+- cleanup 删除 json/pdf 时按所在目录 `rmtree`——可能连带删掉 full.md。现改为 json/pdf/
+  临时文件**按文件**删除；仅 `images/` / `images_notes/` 整目录删。
+- full.md 缺失或为空时拒绝删 `images_notes/`（防止销毁已融合成果）。
+
+### 测试
+- `tests/test_enrich.py`（25 用例）：断点跳过、GLM 降级、空图、整本统计/续跑、内嵌替换/
+  缺笔记保留引用/dry-run/切片跨找、向导默认/EOF/非法输入重问/零图不问、cleanup 护栏/
+  部分删/全删/full.md 保护、CLI 注册。真实 RapidOCR smoke 验证。
+- 全量 150 用例通过。
+
+## [0.5.2] — 2026-08-22
+
+### 新增
+- **智能切片**（`base.py`）：`smart_slice()` 三档路由（TOC 目录 → 字体大小标题检测 →
+  硬切兜底）。TOC 只取一级标题避免切得过碎。保证在 200 页 API 限制内内容不断连。
+- **`dtmd plan` 命令**：扫描文档目录，分析页数与目录结构，生成 `plan.json`（智能切片块）。
+  所有文件走统一管线（不再分普通/复杂）。
+- **`dtmd merge` 命令**：把切片输出（`p{start}-{end}/full.md`）按页序拼回 `_mineru/`
+  根目录的一篇完整 `full.md`。支持 `--recursive` 与 `--dry-run`。
+- **200 页校验告警**（`cloud.py`）：超过 200 页的块上传前跳过并告警，避免 API 拒绝。
+
+### 修复
+- `cloud.py` 注释更正 API 限额（每日 ~5000 文件、单文件 200 页、每日前 1000 页高优）。
+- `base.py` 模块 docstring 补全 API 限额说明。
+- 清理 `merge_mineru_dir()` 中未使用的 `import glob`。
+
+## [0.5.1] — 2026-08-22
+
+### 新增
+- **HTML 云端转写**（`--html` / `--html-dir`）：HTML 文件上传 mineru.net，
+  `model_version="MinerU-HTML"`。`_model_version()` 按扩展名自动选模型。全流程：
+  上传 → 轮询 → 下载 zip → 解压 → 自动清洗（块级 + 渠道水印）。
+- **`dtmd convert --mode cloud --html <路径>`**：转写单个 HTML 文件。
+- **`dtmd convert --mode cloud --html-dir <目录>`**：递归转写目录下所有 `.html`/`.htm`。
+- **`_model_version(filepath)`**：`.html`/`.htm` → `"MinerU-HTML"`，其他 → `"vlm"`，
+  替换两处硬编码。
+
+### 修复
+- **`--dry-run` 透传**：CLI 解析器消费的 `--dry-run` 现在正确转发给 `cloud.main()`
+  （历史遗留，影响所有云端子命令）。
+
+### 测试
+- `tests/test_html_cloud.py`（22 用例）：`_model_version()` 扩展名检测、`_html_mode()`
+  dry-run 路径解析、CLI 参数解析、边界（文件不存在/空目录/去重/非 HTML 过滤）。
+- 全链路人工验证：HTML → MinerU 云端 → 干净 Markdown。
+- 既有 29 用例零回归。
+
 ## [0.5.0] — 2026-08-21
 
 ### 新增
