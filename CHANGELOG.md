@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-17
+
+### Fixed
+- **A fresh clone no longer dies on its first cloud command**
+  (`src/dtmd/config.py`): the README promises `_data/` is created on first run,
+  but only the *local* conversion path ever created it. The cloud path writes
+  `_data/plan.json` as its very first step, and `_data/` is gitignored — so a
+  clone or `git archive` never carries it, and the command failed with
+  `FileNotFoundError: …/_data/plan.json`. The directory is now created on import.
+
+### Changed
+- **The embedded illustration note is no longer titled with the image's
+  sha256** (`src/dtmd/convert/enrich.py`): the heading was
+  `## 插图笔记：<sha256>`, which put a file identifier the reader cannot use into
+  `full.md`. Worse, the hash's digit fragments (`01814`, `0531994`, …) read as
+  ordinary numbers to any downstream numeric reconciliation, which then demanded
+  the note echo them back. The heading is now a plain `## 插图笔记`. Idempotency
+  is unaffected: once the `![](images/…)` reference has been replaced, a re-run
+  has nothing to match.
+
 ## [0.6.0] - 2026-08-23
 
 ### Added

@@ -131,7 +131,10 @@ class TestEmbedNotes:
         assert e["files"] == 1 and e["embedded"] == 2 and e["missing"] == 0
         md = (root / "full.md").read_text(encoding="utf-8")
         assert "![](images/a.jpg)" not in md
-        assert "## 插图笔记：a" in md and "文字X" in md
+        assert "## 插图笔记" in md and "文字X" in md
+        # 标题里不许带图片文件名/哈希：那是内部标识符，读者拿不到，而且哈希的
+        # 数字碎片会被下游的数字对账当成"源文里的数字"（见 CHANGELOG 0.7.0）。
+        assert "插图笔记：" not in md
 
     def test_missing_note_keeps_ref(self, tmp_path):
         """无笔记的引用保留原样"""

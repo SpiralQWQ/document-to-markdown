@@ -37,6 +37,15 @@ ARCHIVE_DIR = os.path.join(TOOLS, "_archive")
 # QA 产物目录（L1 待复审队列 / L2 / L3 / 报告）
 QA_DATA_DIR = os.path.join(DATA_DIR, "qa")
 
+# 数据目录在导入时就建好。README「Step 4 ... Scripts auto-create _data/ … on
+# first run」承诺了这件事，但此前只有**本地**转换那条路真的建过它
+# （convert/local.py 建的是它自己那个文件所在目录）；**云端**路径第一步
+# `dtmd plan` 要写 `_data/plan.json`，目录不在就直接
+# `FileNotFoundError: ..._data\plan.json`。一个全新克隆跑 `python -m dtmd plan`
+# 必踩（2026-10-15 实测：库内 git archive 副本里 `_data/` 被 .gitignore 排除，
+# 于是整条文档线第一步就断）。
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # 数据文件
 PLAN = os.path.join(DATA_DIR, "plan.json")
 PROGRESS_FILE = os.path.join(DATA_DIR, "auto_progress.json")

@@ -10,7 +10,7 @@ full.md 里只有死引用 ![](images/xx.jpg)——图里的信息 AI 读不到�
 本模块三步解决：
   1. enrich_image():  单张图 → OCR(免费) + GLM 视觉理解(可选) → images_notes/xx.md
   2. enrich_dir():    整个 _mineru/ 遍历 images/ 全量转（断点续跑：已有 md 跳过）
-  3. embed_notes():   full.md 的图片引用 → 替换为笔记全文（"## 插图笔记：xx"）
+  3. embed_notes():   full.md 的图片引用 → 替换为笔记全文（"## 插图笔记"）
 
 调用
 ----
@@ -277,7 +277,12 @@ def embed_notes(out_dir: str, dry_run: bool = False) -> dict:
             if lines and lines[0].startswith("# "):
                 lines = lines[1:]  # 去掉 "# stem" 首行防一级标题冲突
             block = "\n".join(lines).strip()
-            return f"\n\n## 插图笔记：{stem}\n\n{block}\n"
+            # 标题**不带**文件名。那串是图片的 sha256：读者拿不到、也用不上，
+            # 却会随 full.md 流进下游产物——哈希的数字碎片（`01814`、`0531994`…）
+            # 在下游的数字对账眼里就是"源文里的普通数字"，于是反过来要求笔记
+            # 把它们写回去。幂等不靠它：引用一旦被替换，重跑就匹配不到
+            # `![](images/…)` 了。
+            return f"\n\n## 插图笔记\n\n{block}\n"
 
         new_content = pat.sub(repl, content)
         with open(md_path, "w", encoding="utf-8") as f:

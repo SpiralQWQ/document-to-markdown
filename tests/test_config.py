@@ -51,3 +51,21 @@ def test_pandoc_env_override(monkeypatch):
     monkeypatch.setenv("DTM_PANDOC", "/custom/pandoc")
     mod = importlib.reload(config)
     assert mod.PANDOC == "/custom/pandoc"
+
+
+def test_data_dir_is_created_on_import(monkeypatch, tmp_path):
+    """`_data/` 必须随导入自动建好。
+
+    README「Step 4 … Scripts auto-create `_data/` … on first run」承诺了这件事，
+    但此前只有**本地**转换那条路真的建过它；**云端**路径第一步 `dtmd plan` 要写
+    `_data/plan.json`，目录不在就直接 FileNotFoundError——一个全新克隆
+    （或我们那份 git archive 库内副本，`_data/` 被 .gitignore 排除）跑
+    `python -m dtmd plan` 必踩。
+    """
+    monkeypatch.setenv("DTM_TOOLS", str(tmp_path))
+    mod = importlib.reload(config)
+    assert (tmp_path / "_data").is_dir()
+    assert mod.DATA_DIR == str(tmp_path / "_data")
+    # 还原，别把后面的用例带到这个临时根上
+    monkeypatch.delenv("DTM_TOOLS", raising=False)
+    importlib.reload(config)
