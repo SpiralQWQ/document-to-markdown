@@ -1,9 +1,11 @@
-# 验收报告 v0.1.0 — _mineru_tools 质检补丁与目录整理
+# 验收报告 v0.1.0 — 本地母本质检补丁与目录整理
 
 > 日期：2026-08-11
-> 项目：M.AIStudy 文档转写工具（MinerU 双通道）
+> 项目：本项目（MinerU 双通道）
 > 范围：目录整理 + 4 个补丁（T1 mistune / T2 camelot / T4 pikepdf / T5 Pandoc）
-> 前置：基于 673 仓文档转写调研（`_调研/github笔记格式调研/文档转写md调研/`）的补丁重构计划
+> 前置：基于 673 仓文档转写调研（本仓库的调研文档目录）的补丁重构计划
+> 注（2026-10-17 脱敏）：本报告是发布前的历史验收记录，正文按原样保留；
+> 其中本地目录名与本机安装路径已改为中性写法，不影响结论。
 
 ---
 
@@ -32,7 +34,7 @@
 
 ### 结构变更
 ```
-_mineru_tools/
+本地母本/
 ├── auto_convert.py / mineru_day.py / watchdog.py / mineru_local_batch.py / check_done.py / glm_mineru_proxy.py / wait_cloud.sh  ← 核心脚本（根目录）
 ├── _data/    plan.json, auto_progress.json, watchdog_heartbeat.json
 ├── _docs/    cloud_plan.md, complex_list.md, 验收报告, CHANGELOG
@@ -134,7 +136,7 @@ _mineru_tools/
 ## 七、T5 Pandoc 多格式导出
 
 ### 实现
-- Pandoc 便携版 3.10.1 解压到 `AAA.Tool\T.Pandoc_Convert_Env_v3.10.1`
+- Pandoc 便携版 3.10.1 解压到本机一个便携环境目录（路径从略）
 - 新增 `export_md.py`（docx/html/epub/pptx 导出，cd 到 md 目录保图片路径）
 - 支持 --to / --out 参数
 
@@ -170,10 +172,10 @@ _mineru_tools/
 | mistune | 系统 Python | 3.3.4 |
 | camelot-py[base] | 系统 Python | 2.0.0 |
 | pikepdf | 系统 Python | 10.11.0 |
-| Pandoc | AAA.Tool\T.Pandoc_Convert_Env_v3.10.1 | 3.10.1 |
-| Pix2Text（T3 用，保留不删）| AAA.Tool\T.Pix2Text_FormulaOCR_Env_v1.1.6 | 1.1.6 |
+| Pandoc | 本机便携环境 | 3.10.1 |
+| Pix2Text（T3 用，保留不删）| 本机便携环境 | 1.1.6 |
 
-> 注：系统 Python 指 `C:\Program Files\Python312\python.exe`（脚本运行环境，fitz 所在）。
+> 注：系统 Python 指本机安装的 Python 3.12（脚本运行环境，fitz 所在；具体安装路径从略）。
 
 ---
 
